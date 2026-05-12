@@ -1,0 +1,10 @@
+{
+  "name": "agents",
+  "owner": {
+    "name": "jholownia"
+  },
+  "metadata": {
+    "description": "Personal collection of skills and plugins for AI agents"
+  },
+  "plugins": []
+}
