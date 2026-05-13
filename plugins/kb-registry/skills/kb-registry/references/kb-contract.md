@@ -9,6 +9,7 @@ Every knowledge base must contain:
   AGENTS.md       # Agent rules for this KB
   BRIEF.md        # Compact summary — progressive disclosure entrypoint
   INDEX.md        # Navigational index
+  LOG.md          # Maintenance and consolidation journal
   inbox/          # Staging area for raw material
   knowledge/      # Canonical synthesized knowledge
   sources/        # Optional source material or pointers
@@ -27,11 +28,18 @@ The primary entrypoint for agents. Should contain:
 
 KB-local rules that agents must follow:
 - Stage raw material in `inbox/`
-- Don't casually rewrite canonical knowledge
+- Treat `inbox/` as source material and `knowledge/` as synthesized output
+- Follow the KB's existing organization before inventing new categories
+- Propose a dry-run plan before canonical rewrites unless explicitly told to apply
 - Preserve provenance
 - Prefer concise, durable notes
 - No secrets or credentials
 - Use git history for auditability
+
+## LOG.md
+
+Append a short entry when inbox notes are consolidated into canonical knowledge.
+Entries should record consumed inbox/source paths, canonical pages created or updated, and unresolved questions.
 
 ## Inbox format
 

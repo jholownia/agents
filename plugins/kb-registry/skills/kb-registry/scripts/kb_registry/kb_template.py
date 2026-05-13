@@ -7,11 +7,25 @@ import os
 AGENTS_MD = """\
 # Agent Rules
 
+This KB owns its internal organization. Use these rules and the existing
+`knowledge/` structure before inventing new categories.
+
+## Capture
+
 - Stage raw or uncertain material in `inbox/`.
-- Do not rewrite canonical knowledge casually.
 - Preserve provenance when adding facts.
 - Prefer concise, durable notes over transcripts.
 - Do not store secrets, credentials, tokens, or private personal data.
+
+## Consolidation
+
+- Treat `inbox/` as source material and `knowledge/` as synthesized output.
+- Read `BRIEF.md`, `INDEX.md`, `LOG.md`, and existing `knowledge/` pages before canonical edits.
+- Propose a dry-run plan before rewriting canonical knowledge unless explicitly told to apply.
+- Update existing pages when they are the natural home.
+- Create new pages only when the existing structure has no good fit.
+- Preserve consumed inbox/source paths in canonical pages or `LOG.md`.
+- Mark consumed inbox notes processed; do not delete them in v0.
 - Use git history for auditability.
 """
 
@@ -33,6 +47,7 @@ Short description of what this KB contains and when agents should use it.
 - `inbox/` - staged notes awaiting consolidation
 - `sources/` - optional source material or pointers
 - `tools/` - reserved for future reusable diagnostics
+- `LOG.md` - maintenance and consolidation journal
 
 ## Retrieval Guidance
 
@@ -43,6 +58,37 @@ INDEX_MD = """\
 # Index
 
 Navigational index for this knowledge base.
+
+## Canonical Knowledge
+
+- [Knowledge README](knowledge/README.md)
+
+## Staging
+
+- [Inbox README](inbox/README.md)
+
+## Sources
+
+- [Sources README](sources/README.md)
+
+## Maintenance
+
+- [Maintenance Log](LOG.md)
+- [Tools README](tools/README.md)
+"""
+
+LOG_MD = """\
+# Maintenance Log
+
+Append short entries when inbox notes are consolidated into canonical knowledge.
+
+Each entry should include:
+
+- date
+- agent/tool identity when useful
+- inbox/source paths consumed
+- canonical pages created or updated
+- unresolved questions or follow-up work
 """
 
 INBOX_README = """\
@@ -52,6 +98,9 @@ Staging area for raw or uncertain material.
 
 Files here are individual Markdown notes with metadata frontmatter,
 awaiting review and consolidation into `knowledge/`.
+
+Processed notes may be moved under `inbox/processed/` after their durable
+content is synthesized into canonical knowledge.
 """
 
 KNOWLEDGE_README = """\
@@ -89,7 +138,7 @@ Thumbs.db
 """
 
 # Required contract files/dirs
-CONTRACT_FILES = ["AGENTS.md", "BRIEF.md", "INDEX.md"]
+CONTRACT_FILES = ["AGENTS.md", "BRIEF.md", "INDEX.md", "LOG.md"]
 CONTRACT_DIRS = ["inbox", "knowledge", "sources", "tools"]
 
 
@@ -107,6 +156,7 @@ def create_kb(path, name):
     _write("AGENTS.md", AGENTS_MD)
     _write("BRIEF.md", BRIEF_TEMPLATE.format(name=name))
     _write("INDEX.md", INDEX_MD)
+    _write("LOG.md", LOG_MD)
     _write("inbox/README.md", INBOX_README)
     _write("knowledge/README.md", KNOWLEDGE_README)
     _write("sources/README.md", SOURCES_README)

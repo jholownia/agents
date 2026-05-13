@@ -26,6 +26,7 @@ kb open my-project knowledge/overview.md
 
 - **CLI** (`scripts/kb`) — all operations go through the `kb` command.
 - **Skill** (`SKILL.md`) — teaches Claude when and how to use KBs.
+- **Dream skill** (`skills/kb-dream`) — agent-led inbox consolidation using each KB's local rules.
 - **Config** — `~/.config/kb-registry/registry.json`
 - **Metrics** — `~/.local/state/kb-registry/events.jsonl`
 
@@ -36,3 +37,5 @@ Agents follow: `list` → `brief` → `search` → `open` → direct inspection.
 ## v0 scope
 
 Python 3 stdlib only. Lexical search via `rg`. Markdown/Git KBs. No MCP, vector search, or autonomous rewrites.
+
+Inbox consolidation is intentionally skill-led. Agents use `kb-dream` to propose and apply KB-specific canonical updates; the CLI does not impose a global knowledge taxonomy.

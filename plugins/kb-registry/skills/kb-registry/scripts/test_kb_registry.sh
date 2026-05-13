@@ -79,6 +79,7 @@ run "bootstrap test" $KB --config "$CONFIG" bootstrap test --path "$TEST_KB"
 run "test-kb exists" test -d "$TEST_KB"
 run "BRIEF.md exists" test -f "$TEST_KB/BRIEF.md"
 run "AGENTS.md exists" test -f "$TEST_KB/AGENTS.md"
+run "LOG.md exists" test -f "$TEST_KB/LOG.md"
 run "inbox/ exists" test -d "$TEST_KB/inbox"
 run "knowledge/ exists" test -d "$TEST_KB/knowledge"
 run "git repo init" git -C "$TEST_KB" rev-parse --git-dir
@@ -226,6 +227,7 @@ echo ""
 echo "--- 14. Plugin structure ---"
 run "plugin.json exists" test -f plugins/kb-registry/.claude-plugin/plugin.json
 run "SKILL.md exists" test -f plugins/kb-registry/skills/kb-registry/SKILL.md
+run "kb-dream SKILL.md exists" test -f plugins/kb-registry/skills/kb-dream/SKILL.md
 run "plugin.json valid JSON" python3 -c "import json; json.load(open('plugins/kb-registry/.claude-plugin/plugin.json'))"
 run "marketplace registered" python3 -c "
 import json

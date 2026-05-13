@@ -46,6 +46,7 @@ Use `--title` for a descriptive heading. Notes are auto-committed to `inbox/`.
 ## Rules
 
 - **Never edit `knowledge/` directly.** Stage to `inbox/` and let humans consolidate.
+- Use the `kb-dream` skill when asked to consolidate inbox notes into canonical knowledge.
 - **Search before staging** — avoid duplicating existing knowledge.
 - **Keep notes concise and durable** — no conversation transcripts.
 - **Preserve provenance** — note where facts came from.
