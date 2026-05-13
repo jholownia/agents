@@ -1,0 +1,38 @@
+# KB Registry
+
+Claude Code plugin for managing agent-maintained knowledge bases.
+
+## What it does
+
+Gives agents a persistent, scoped, searchable, git-backed place to stage and retrieve synthesized knowledge without polluting project repositories.
+
+## Quick start
+
+```bash
+# Bootstrap a new KB
+kb bootstrap my-project --path ~/knowledge/my-project-kb
+
+# Stage a discovery
+kb stage my-project --kind decision --note "We chose X because Y."
+
+# Search across KBs
+kb search "architecture"
+
+# Read a specific file
+kb open my-project knowledge/overview.md
+```
+
+## Architecture
+
+- **CLI** (`scripts/kb`) — all operations go through the `kb` command.
+- **Skill** (`SKILL.md`) — teaches Claude when and how to use KBs.
+- **Config** — `~/.config/kb-registry/registry.json`
+- **Metrics** — `~/.local/state/kb-registry/events.jsonl`
+
+## Progressive disclosure
+
+Agents follow: `list` → `brief` → `search` → `open` → direct inspection.
+
+## v0 scope
+
+Python 3 stdlib only. Lexical search via `rg`. Markdown/Git KBs. No MCP, vector search, or autonomous rewrites.

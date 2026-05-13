@@ -6,5 +6,12 @@
   "metadata": {
     "description": "Personal collection of skills and plugins for AI agents"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "kb-registry",
+      "description": "Manage agent-maintained knowledge bases — persistent, scoped, searchable, git-backed.",
+      "source": "./plugins/kb-registry",
+      "version": "0.1.0"
+    }
+  ]
 }

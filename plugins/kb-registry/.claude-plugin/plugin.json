@@ -1,0 +1,28 @@
+{
+  "name": "kb-registry",
+  "description": "Manage agent-maintained knowledge bases — persistent, scoped, searchable, git-backed.",
+  "version": "0.1.0",
+  "author": {
+    "name": "jholownia"
+  },
+  "userConfig": {
+    "registry_config_path": {
+      "type": "string",
+      "title": "Registry config path",
+      "description": "Path to registry config file. Default: ~/.config/kb-registry/registry.json",
+      "default": "~/.config/kb-registry/registry.json"
+    },
+    "default_kb_root": {
+      "type": "string",
+      "title": "Default KB root",
+      "description": "Default parent directory for new KBs. Default: ~/knowledge",
+      "default": "~/knowledge"
+    },
+    "metrics_path": {
+      "type": "string",
+      "title": "Metrics path",
+      "description": "Path to JSONL metrics file. Default: ~/.local/state/kb-registry/events.jsonl",
+      "default": "~/.local/state/kb-registry/events.jsonl"
+    }
+  }
+}
