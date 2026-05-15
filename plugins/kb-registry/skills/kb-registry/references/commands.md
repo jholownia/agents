@@ -114,7 +114,6 @@ Lexical search using `rg` (with Python fallback).
 ```bash
 kb search <kb> "<query>"
 kb search "<query>"              # search all KBs
-kb search --all "<query>"
 kb search <kb> "<query>" --max-results 10 --glob "*.md"
 kb search <kb> "<query>" --exclude-inbox
 ```

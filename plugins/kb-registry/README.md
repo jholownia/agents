@@ -27,8 +27,8 @@ kb open my-project knowledge/overview.md
 - **CLI** (`scripts/kb`) — all operations go through the `kb` command.
 - **Skill** (`SKILL.md`) — teaches Claude when and how to use KBs.
 - **Dream skill** (`skills/kb-dream`) — agent-led inbox consolidation using each KB's local rules.
-- **Config** — `~/.config/kb-registry/registry.json`
-- **Metrics** — `~/.local/state/kb-registry/events.jsonl`
+- **Config** — `~/.config/kb-registry/registry.json` (override with `--config` or `KB_REGISTRY_CONFIG`)
+- **Metrics** — `~/.local/state/kb-registry/events.jsonl` (override via `metrics_path` in the config file)
 
 ## Progressive disclosure
 

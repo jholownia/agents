@@ -32,7 +32,9 @@ organization.
 5. Keep canonical pages concise, synthesized, and durable.
 6. Do not import transcripts, duplicate raw notes, secrets, or one-off noise.
 7. Prefer the KB's existing organization over a generic taxonomy.
-8. Present a dry-run plan before canonical edits unless the user explicitly asked to apply.
+8. **Prefer updating an existing canonical page over creating a new one.** Duplication is the primary failure mode this workflow exists to prevent — search the KB before creating.
+9. **Replace, don't accrete.** When a new note contradicts an existing canonical claim, replace the old claim and append a supersession entry to `LOG.md` referencing both paths. Use `supersedes:` frontmatter on the rewritten page when the prior version lived in `knowledge/`.
+10. Present a dry-run plan before canonical edits unless the user explicitly asked to apply.
 
 ## Workflow
 
@@ -97,7 +99,9 @@ When approved, edit the KB directly:
 - write synthesized pages under `knowledge/`
 - update `INDEX.md` when navigation changes
 - update `BRIEF.md` only when scope/key areas changed
-- append a short entry to `LOG.md`
+- stamp `last_reviewed: <ISO date>` in the frontmatter of any canonical page you touched
+- when a new note contradicts an existing canonical claim, **replace the old claim** and append a supersession entry to `LOG.md` listing both the consumed inbox note and the prior canonical claim (interference, not silent rewrite)
+- append a short entry to `LOG.md` summarising what was consumed
 - mark consumed inbox notes as processed or move them under `inbox/processed/`
 
 Use the KB's own conventions if they differ from this default.

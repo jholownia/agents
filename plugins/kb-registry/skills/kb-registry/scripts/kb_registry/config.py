@@ -30,13 +30,28 @@ def ensure_parent(path):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
 
 
+class ConfigError(Exception):
+    """Raised when the config file is unreadable or malformed."""
+
+
 def load_config(path):
-    """Load config from JSON file. Returns empty config if file missing."""
+    """Load config from JSON file. Returns empty config if file missing.
+
+    Raises ConfigError with a friendly message on malformed JSON or I/O errors.
+    """
     path = os.path.expanduser(path)
     if not os.path.isfile(path):
         return dict(EMPTY_CONFIG, **{"kbs": []})
-    with open(path, "r") as f:
-        return json.load(f)
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(
+            f"Config file {path} is not valid JSON: {exc.msg} "
+            f"(line {exc.lineno}, column {exc.colno})"
+        ) from exc
+    except OSError as exc:
+        raise ConfigError(f"Cannot read config file {path}: {exc}") from exc
 
 
 def save_config(config, path):
@@ -65,8 +80,16 @@ def get_default_kb(config):
 
 
 def add_kb(config, entry):
-    """Add a KB entry to config. Does not check for duplicates."""
-    config.setdefault("kbs", []).append(entry)
+    """Add a KB entry to config. Does not check for duplicates.
+
+    If the new entry is marked default, clear the default flag on every
+    other entry so the single-default invariant holds.
+    """
+    kbs = config.setdefault("kbs", [])
+    if entry.get("default"):
+        for existing in kbs:
+            existing["default"] = False
+    kbs.append(entry)
 
 
 def remove_kb(config, name):

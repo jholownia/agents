@@ -64,6 +64,8 @@ Prefer:
 - links to related pages
 - provenance section
 - "Open Questions" when uncertain
+- staleness markers: stamp `last_reviewed: <ISO date>` in frontmatter every time you touch a canonical page, so `rg 'last_reviewed: 2024'` finds drift later
+- when a page replaces material, add `supersedes:` frontmatter listing the prior inbox/knowledge paths
 
 Avoid:
 
@@ -72,3 +74,23 @@ Avoid:
 - speculative architecture
 - duplicating entire inbox notes
 - a global taxonomy that conflicts with the KB's local structure
+- silent rewrites: every replaced claim deserves a `LOG.md` supersession entry
+
+## Frontmatter conventions
+
+Canonical pages may carry the following optional frontmatter:
+
+```yaml
+---
+last_reviewed: "2026-05-15"
+supersedes:
+  - inbox/2026/05/20260512-103000-old-decision.md
+  - knowledge/design/old-page.md
+---
+```
+
+These are conventions, not CLI-enforced fields. `kb-dream` writes them when consolidating; future v0.1 verbs (`kb forget`, `kb supersede`) will consume them.
+
+## Open Questions lifecycle
+
+When a canonical page records uncertainty under an "Open Questions" heading, treat those bullets as work items on the next dream pass. Either answer them (and remove the bullet) or move them to `LOG.md` if they're no longer relevant. Open Questions that survive multiple passes are a signal the page should be retired or split.

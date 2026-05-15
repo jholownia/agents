@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from . import __version__
 from .config import (
+    ConfigError,
     add_kb,
     find_kb,
     get_default_kb,
@@ -141,6 +142,11 @@ def cmd_bootstrap(args, config, config_path):
                 print(f"Error: git clone failed: {out}", file=sys.stderr)
                 ctx["success"] = False
                 return EXIT_GIT
+            # Warn if cloned repo does not satisfy the KB contract.
+            missing = validate_kb_contract(kb_path)
+            if missing:
+                print(f"Warning: cloned KB is missing contract items: "
+                      f"{', '.join(missing)}", file=sys.stderr)
         else:
             if os.path.exists(kb_path) and os.listdir(kb_path):
                 if not args.force:
@@ -573,18 +579,23 @@ def cmd_stage(args, config, config_path):
             "kind": kind,
             "source_cwd": os.getcwd(),
             "source_file": os.path.abspath(args.file) if args.file else None,
+            "source": args.source if args.source else None,
             "agent": "claude-code",
             "status": "staged",
         }
         if title:
             frontmatter["title"] = title
 
+        def _yaml_str(s):
+            # Escape \ and " for a double-quoted YAML scalar.
+            return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
         fm_lines = ["---"]
         for k, v in frontmatter.items():
             if v is None:
                 fm_lines.append(f'{k}: null')
             elif isinstance(v, str):
-                fm_lines.append(f'{k}: "{v}"')
+                fm_lines.append(f'{k}: {_yaml_str(v)}')
             else:
                 fm_lines.append(f'{k}: {v}')
         fm_lines.append("---")
@@ -778,7 +789,6 @@ def build_parser():
                        parents=[shared])
     p.add_argument("kb", nargs="?")
     p.add_argument("query")
-    p.add_argument("--all", action="store_true")
     p.add_argument("--max-results", type=int)
     p.add_argument("--glob")
     p.add_argument("--include-inbox", action="store_true", default=True)
@@ -827,7 +837,11 @@ def main():
         return EXIT_ARGS
 
     config_path = resolve_config_path(args.config_path)
-    config = load_config(config_path)
+    try:
+        config = load_config(config_path)
+    except ConfigError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return EXIT_ARGS
 
     dispatch = {
         "bootstrap": cmd_bootstrap,

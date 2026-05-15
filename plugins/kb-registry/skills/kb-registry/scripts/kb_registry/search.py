@@ -1,5 +1,6 @@
 """Lexical search: rg-first with Python fallback."""
 
+import fnmatch
 import json
 import os
 import re
@@ -105,10 +106,8 @@ def _search_python(path, query, max_results=20, glob_pattern=None,
 
 
 def _glob_match(filename, pattern):
-    """Very simple glob: *.ext matching only."""
-    if pattern.startswith("*."):
-        return filename.endswith(pattern[1:])
-    return True
+    """Shell-style glob match (e.g. *.md, decision-*.md)."""
+    return fnmatch.fnmatch(filename, pattern)
 
 
 def search_kb(path, query, max_results=20, glob_pattern=None,

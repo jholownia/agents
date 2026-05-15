@@ -51,6 +51,7 @@ created_at: "2026-05-12T10:30:00+01:00"
 kind: "decision"
 source_cwd: "/Users/jh/Code/agents"
 source_file: null
+source: null
 agent: "claude-code"
 status: "staged"
 ---
@@ -61,6 +62,13 @@ Content here.
 ```
 
 Files are stored at `inbox/YYYY/MM/YYYYMMDD-HHMMSS-<slug>.md`.
+
+## Optional frontmatter conventions
+
+These fields are not first-class CLI flags in v0 — `kb-dream` writes them when consolidating, and `rg` finds them later:
+
+- `supersedes:` — list of inbox/knowledge paths this note or page replaces.
+- `last_reviewed:` — ISO date stamped on canonical pages so staleness is greppable.
 
 ## Validation
 

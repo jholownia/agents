@@ -7,7 +7,8 @@ import re
 SECRET_PATTERNS = [
     (r"AKIA[0-9A-Z]{16}", "AWS access key"),
     (r"(?i)aws_secret_access_key\s*[=:]\s*\S+", "AWS secret key"),
-    (r"-----BEGIN\s+(RSA\s+)?PRIVATE KEY-----", "Private key"),
+    (r"-----BEGIN\s+(RSA\s+|DSA\s+|EC\s+|OPENSSH\s+|PGP\s+)?PRIVATE KEY-----",
+     "Private key"),
     (r"ghp_[A-Za-z0-9]{36}", "GitHub personal access token"),
     (r"gho_[A-Za-z0-9]{36}", "GitHub OAuth token"),
     (r"ghs_[A-Za-z0-9]{36}", "GitHub app token"),

@@ -135,7 +135,30 @@ echo ""
 echo "--- 6. Safety ---"
 run_fail 3 "reject AWS key" $KB --config "$CONFIG" stage test --note "key is AKIA1234567890ABCDEF"
 run_fail 3 "reject private key" $KB --config "$CONFIG" stage test --note "-----BEGIN PRIVATE KEY-----"
+run_fail 3 "reject OpenSSH private key" $KB --config "$CONFIG" stage test --note "-----BEGIN OPENSSH PRIVATE KEY-----"
 run_fail 3 "reject generic secret" $KB --config "$CONFIG" stage test --note "password=hunter2"
+
+# Frontmatter must survive embedded double-quote in title.
+run "stage note with quoted title" $KB --config "$CONFIG" stage test --note "body" --title 'He said "hi"'
+LATEST_NOTE=$(find "$TEST_KB/inbox" -name '*he-said-hi*.md' | head -1)
+if [ -n "$LATEST_NOTE" ] && grep -q 'title: "He said \\"hi\\""' "$LATEST_NOTE"; then
+    PASS=$((PASS+1))
+    echo "  PASS  quoted title escaped in frontmatter"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  quoted title not escaped (file=$LATEST_NOTE)"
+fi
+
+# --source must appear in frontmatter.
+run "stage with --source" $KB --config "$CONFIG" stage test --note "src-test note" --source "conversation-123"
+SRC_NOTE=$(grep -rl "src-test note" "$TEST_KB/inbox" | head -1)
+if [ -n "$SRC_NOTE" ] && grep -q 'source: "conversation-123"' "$SRC_NOTE"; then
+    PASS=$((PASS+1))
+    echo "  PASS  --source threaded into frontmatter"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  --source not in frontmatter (file=$SRC_NOTE)"
+fi
 
 echo ""
 echo "--- 7. Search ---"
@@ -170,6 +193,35 @@ run "list after add" $KB --config "$CONFIG" list
 echo ""
 echo "--- 11. Sync ---"
 run "sync local-only" $KB --config "$CONFIG" sync test
+
+echo ""
+echo "--- 11b. Malformed config rejected ---"
+BAD_CONFIG="$TMPDIR/bad.json"
+echo "{ not json" > "$BAD_CONFIG"
+run_fail 2 "malformed config exits 2" $KB --config "$BAD_CONFIG" list
+
+echo ""
+echo "--- 11c. Single-default invariant ---"
+DEFAULT_CONFIG="$TMPDIR/default.json"
+cat > "$DEFAULT_CONFIG" <<JSON
+{"version": 1, "default_kb_root": "$TMPDIR", "metrics_path": "$METRICS", "kbs": []}
+JSON
+KB_ONE="$TMPDIR/kb-one"
+KB_TWO="$TMPDIR/kb-two"
+$KB --config "$DEFAULT_CONFIG" bootstrap one --path "$KB_ONE" --default >/dev/null 2>&1
+$KB --config "$DEFAULT_CONFIG" bootstrap two --path "$KB_TWO" --default >/dev/null 2>&1
+DEFAULT_COUNT=$(python3 -c "
+import json
+d = json.load(open('$DEFAULT_CONFIG'))
+print(sum(1 for k in d['kbs'] if k.get('default')))
+")
+if [ "$DEFAULT_COUNT" -eq 1 ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  exactly one default after second --default bootstrap"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected 1 default, got $DEFAULT_COUNT"
+fi
 
 echo ""
 echo "--- 12. --config works from top-level ---"
