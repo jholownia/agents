@@ -3,8 +3,10 @@
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from . import __version__
 from .config import (
@@ -44,7 +46,6 @@ from .safety import (
     check_canonical_write,
     check_large_file,
     check_path_traversal,
-    scan_secrets,
 )
 from .search import search_kb
 
@@ -99,9 +100,23 @@ def _slugify(text, max_len=40):
     for ch in text.lower():
         if ch.isalnum():
             slug += ch
-        elif ch in " -_" and slug and slug[-1] != "-":
+        elif ch in " -_/" and slug and slug[-1] != "-":
             slug += "-"
     return slug.strip("-")[:max_len] or "note"
+
+
+def _url_slug(url):
+    """Derive a filename slug from a URL: last path segment, fallback to host."""
+    try:
+        parsed = urlparse(url)
+        path = parsed.path.strip("/")
+        if path:
+            return _slugify(path)
+        if parsed.netloc:
+            return _slugify(parsed.netloc)
+    except Exception:
+        pass
+    return "url"
 
 
 def _metrics_path(config):
@@ -509,6 +524,14 @@ def cmd_search(args, config, config_path):
 
 
 def cmd_stage(args, config, config_path):
+    """Stage one of:
+      - a note   (agent-written text, frontmatter + body) via --note
+      - a document (any text file, copied verbatim, no frontmatter) via --file
+      - a URL pointer (fetched/summarised later by kb-dream) via --url
+
+    --note may accompany --url to provide a description; otherwise --file,
+    --note, and --url are mutually exclusive primary inputs.
+    """
     kb, err = _resolve_kb(config, args.kb)
     if err:
         print(f"Error: {err}", file=sys.stderr)
@@ -519,10 +542,26 @@ def cmd_stage(args, config, config_path):
         print(f"Error: KB path does not exist: {kb_path}", file=sys.stderr)
         return EXIT_FAILURE
 
-    # Get content
-    if args.note:
-        content = args.note
-    elif args.file:
+    is_file = bool(args.file)
+    is_url = bool(args.url)
+    is_note_text = bool(args.note)
+
+    if is_file and (is_note_text or is_url):
+        print("Error: --file is mutually exclusive with --note and --url.",
+              file=sys.stderr)
+        return EXIT_ARGS
+    if not (is_file or is_url or is_note_text):
+        print("Error: one of --note, --file, --url is required.",
+              file=sys.stderr)
+        return EXIT_ARGS
+
+    if is_url and not re.match(r"^https?://", args.url):
+        print("Error: --url must start with http:// or https://.",
+              file=sys.stderr)
+        return EXIT_ARGS
+
+    # Resolve content + slug source.
+    if is_file:
         src = os.path.abspath(args.file)
         if not os.path.isfile(src):
             print(f"Error: file not found: {src}", file=sys.stderr)
@@ -536,31 +575,38 @@ def cmd_stage(args, config, config_path):
                 return EXIT_ARGS
         with open(src, "r") as f:
             content = f.read()
+        slug_source = os.path.splitext(os.path.basename(src))[0]
+        if args.kind or args.title or args.source:
+            print("Note: --kind/--title/--source are ignored for --file "
+                  "(documents have no frontmatter).", file=sys.stderr)
+    elif is_url:
+        # Body is the optional --note description; may be empty.
+        content = args.note if args.note else ""
+        slug_source = _url_slug(args.url)
+        if args.kind:
+            print("Note: --kind is forced to 'url' for --url stages.",
+                  file=sys.stderr)
     else:
-        print("Error: --note or --file required.", file=sys.stderr)
-        return EXIT_ARGS
+        # Plain note.
+        content = args.note
+        title = args.title or ""
+        slug_source = title if title else content[:60]
 
-    kind = args.kind or "raw-note"
+    if is_file:
+        kind = None
+    elif is_url:
+        kind = "url"
+    else:
+        kind = args.kind or "raw-note"
 
     with track_command(_metrics_path(config), "stage", kb=kb["name"]) as ctx:
-        ctx["kind"] = kind
+        if kind is not None:
+            ctx["kind"] = kind
 
-        # Safety: secret scan
-        secrets = scan_secrets(content)
-        if secrets and not args.force:
-            ctx["safety_rejected"] = True
-            ctx["success"] = False
-            print(f"Error: likely secrets detected: {', '.join(secrets)}",
-                  file=sys.stderr)
-            print("Use --force to override.", file=sys.stderr)
-            return EXIT_SAFETY
-
-        # Build filename
         now = datetime.now(timezone.utc).astimezone()
         date_dir = now.strftime("%Y/%m")
         timestamp_slug = now.strftime("%Y%m%d-%H%M%S")
-        title = args.title or ""
-        slug = _slugify(title) if title else _slugify(content[:60])
+        slug = _slugify(slug_source)
         filename = f"{timestamp_slug}-{slug}.md"
         rel_path = os.path.join("inbox", date_dir, filename)
 
@@ -573,40 +619,39 @@ def cmd_stage(args, config, config_path):
         full_path = os.path.join(kb_path, rel_path)
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
-        # Build frontmatter
-        frontmatter = {
-            "created_at": now.isoformat(),
-            "kind": kind,
-            "source_cwd": os.getcwd(),
-            "source_file": os.path.abspath(args.file) if args.file else None,
-            "source": args.source if args.source else None,
-            "agent": "claude-code",
-            "status": "staged",
-        }
-        if title:
-            frontmatter["title"] = title
-
         def _yaml_str(s):
-            # Escape \ and " for a double-quoted YAML scalar.
             return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
-        fm_lines = ["---"]
-        for k, v in frontmatter.items():
-            if v is None:
-                fm_lines.append(f'{k}: null')
-            elif isinstance(v, str):
-                fm_lines.append(f'{k}: {_yaml_str(v)}')
-            else:
-                fm_lines.append(f'{k}: {v}')
-        fm_lines.append("---")
-        fm_lines.append("")
+        if is_file:
+            # Document: verbatim.
+            staged_content = content
+        else:
+            # Note or URL pointer: prepend YAML frontmatter.
+            frontmatter = {
+                "created_at": now.isoformat(),
+                "kind": kind,
+            }
+            if is_url:
+                frontmatter["url"] = args.url
+            if args.source:
+                frontmatter["source"] = args.source
+            if args.title:
+                frontmatter["title"] = args.title
 
-        # Title heading
-        heading = title or kind.replace("-", " ").title()
-        fm_lines.append(f"# {heading}")
-        fm_lines.append("")
+            fm_lines = ["---"]
+            for k, v in frontmatter.items():
+                if v is None:
+                    fm_lines.append(f'{k}: null')
+                elif isinstance(v, str):
+                    fm_lines.append(f'{k}: {_yaml_str(v)}')
+                else:
+                    fm_lines.append(f'{k}: {v}')
+            fm_lines.append("---")
+            fm_lines.append("")
+            staged_content = "\n".join(fm_lines) + content
 
-        staged_content = "\n".join(fm_lines) + content + "\n"
+        if not staged_content.endswith("\n"):
+            staged_content += "\n"
 
         with open(full_path, "w") as f:
             f.write(staged_content)
@@ -616,23 +661,38 @@ def cmd_stage(args, config, config_path):
         # Auto-commit: stage only the new file, not unrelated changes
         committed = False
         if not args.no_commit and git_is_repo(kb_path):
+            if is_file:
+                commit_msg = f"kb: stage document {os.path.basename(src)}"
+            elif is_url:
+                commit_msg = f"kb: stage url pointer"
+            else:
+                commit_msg = f"kb: stage {kind} note"
             git_add_files(kb_path, [rel_path])
-            ok, out, rc = git_commit_files(
-                kb_path, f"kb: stage {kind} note", [rel_path]
-            )
+            ok, out, rc = git_commit_files(kb_path, commit_msg, [rel_path])
             committed = ok
             if not ok:
                 print(f"Warning: commit failed: {out}", file=sys.stderr)
 
+        mode = "document" if is_file else ("url" if is_url else "note")
         if args.json:
-            _output({
+            payload = {
                 "kb": kb["name"],
                 "path": rel_path,
-                "kind": kind,
+                "mode": mode,
                 "committed": committed,
-            }, True)
+            }
+            if is_url:
+                payload["url"] = args.url
+            if kind is not None:
+                payload["kind"] = kind
+            _output(payload, True)
         else:
-            print(f"Staged {kind} note: {rel_path}")
+            if is_file:
+                print(f"Staged document: {rel_path}")
+            elif is_url:
+                print(f"Staged URL pointer: {rel_path}")
+            else:
+                print(f"Staged {kind} note: {rel_path}")
 
     return EXIT_OK
 
@@ -795,12 +855,17 @@ def build_parser():
     p.add_argument("--exclude-inbox", action="store_true", default=False)
 
     # stage
-    p = sub.add_parser("stage", help="Stage a note into KB inbox.",
-                       parents=[shared])
+    p = sub.add_parser(
+        "stage",
+        help="Stage a note (--note), document (--file), or URL pointer (--url).",
+        parents=[shared],
+    )
     p.add_argument("kb")
-    p.add_argument("--note")
-    p.add_argument("--file")
-    p.add_argument("--kind", choices=STAGE_KINDS, default="raw-note")
+    p.add_argument("--note", help="Note body, or description when paired with --url.")
+    p.add_argument("--file", help="Path to a text file; staged verbatim.")
+    p.add_argument("--url", help="URL pointer; kb-dream fetches/summarises later.")
+    p.add_argument("--kind", choices=STAGE_KINDS, default=None,
+                   help="Note kind (notes only). Forced to 'url' with --url.")
     p.add_argument("--title")
     p.add_argument("--source")
     p.add_argument("--no-commit", action="store_true")

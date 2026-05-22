@@ -7,22 +7,11 @@
 - Absolute paths are rejected for `open` commands.
 - Symlinks are resolved before path checks on write operations.
 
-## Secret scanning
+## Secrets are agent guidance, not CLI-enforced
 
-Before staging content, the CLI scans for likely secrets:
+v0 does not scan staged content for secrets. Pattern matching is not a credible defense and produces too many false positives on docs that legitimately mention credential-shaped strings.
 
-- AWS access keys (`AKIA...`)
-- AWS secret access key assignments
-- Private keys (`BEGIN PRIVATE KEY`)
-- GitHub tokens (`ghp_`, `gho_`, `ghs_`, `github_pat_`)
-- OpenAI/Anthropic API keys (`sk-`, `sk-ant-`)
-- Generic credential patterns (`password=`, `token=`, `secret=`, `api_key=`)
-
-If detected:
-- Rejected by default (exit 3).
-- `--force` overrides the check.
-- A metric event is recorded with `safety_rejected: true`.
-- Secret values are never printed in output.
+Agents must still treat "do not stage secrets" as a rule (see `AGENTS.md` in each KB). KBs that may receive sensitive material should be kept on private remotes.
 
 ## Canonical write protection
 
@@ -36,6 +25,7 @@ All agent writes go to `inbox/` only.
 
 ## Git safety
 
+- `kb stage` rejects binary files outright and warns on files over 1 MB (override with `--force`).
 - `kb stage` stages and commits only the newly created inbox note, never the whole KB.
 - `kb sync` stops on any dirty working tree in v0.
 - `kb remove --delete-local` refuses dirty KBs unless `--force` is explicitly provided.

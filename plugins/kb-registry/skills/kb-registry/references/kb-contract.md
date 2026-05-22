@@ -43,17 +43,17 @@ Entries should record consumed inbox/source paths, canonical pages created or up
 
 ## Inbox format
 
-Staged notes are individual Markdown files with YAML frontmatter:
+The inbox holds two shapes of material, distinguished by how they got there:
+
+### Notes (agent-written, semi-structured)
+
+Produced by `kb stage --note ...`. Short observations: memory, preferences, decisions worth remembering. YAML frontmatter at the top:
 
 ```yaml
 ---
 created_at: "2026-05-12T10:30:00+01:00"
 kind: "decision"
-source_cwd: "/Users/jh/Code/agents"
-source_file: null
 source: null
-agent: "claude-code"
-status: "staged"
 ---
 
 # Decision: Short Title
@@ -61,13 +61,43 @@ status: "staged"
 Content here.
 ```
 
-Files are stored at `inbox/YYYY/MM/YYYYMMDD-HHMMSS-<slug>.md`.
+Frontmatter fields:
 
-## Optional frontmatter conventions
+- `created_at` — ISO timestamp.
+- `kind` — one of `decision`, `domain-fact`, `codebase-fact`, `runbook-note`, `retrospective`, `raw-note`, or `url`.
+- `source` *(optional)* — short provenance string (e.g. `"discussion-123"`, `"external research"`).
+- `title` *(optional)* — display title.
+- `url` *(url notes only)* — the staged URL.
 
-These fields are not first-class CLI flags in v0 — `kb-dream` writes them when consolidating, and `rg` finds them later:
+Notes own their headings; the CLI does not prepend one.
 
-- `supersedes:` — list of inbox/knowledge paths this note or page replaces.
+### URL pointers (`kind: url`)
+
+Produced by `kb stage --url <url>`. The URL itself is the staged content; `kb-dream` fetches and summarises later. Frontmatter has `kind: url` and `url: <url>`; body is empty unless `--note "<description>"` was passed.
+
+```yaml
+---
+created_at: "2026-05-22T10:30:00+01:00"
+kind: "url"
+url: "https://example.com/article"
+---
+
+Optional description from the agent.
+```
+
+### Documents (verbatim, unstructured)
+
+Produced by `kb stage --file <path>` or by manually dropping a Markdown file into `inbox/`. No frontmatter, no auto-heading — the file is what it is. Provenance lives in the git commit message (`kb: stage document <basename>`).
+
+### Filenames
+
+Both shapes are stored at `inbox/YYYY/MM/YYYYMMDD-HHMMSS-<slug>.md`. The slug is derived from `--title`/content for notes and from the source filename for documents.
+
+## Optional frontmatter conventions (canonical pages only)
+
+These fields apply to `knowledge/` pages, **not** inbox notes. `kb-dream` writes them when consolidating, and `rg` finds them later:
+
+- `supersedes:` — list of inbox/knowledge paths this page replaces.
 - `last_reviewed:` — ISO date stamped on canonical pages so staleness is greppable.
 
 ## Validation

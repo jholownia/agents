@@ -12,11 +12,46 @@ def _rg_available():
     return shutil.which("rg") is not None
 
 
+# Default ripgrep matches-per-file. A single hit per file frequently lands
+# in frontmatter; 3 lets the agent see body matches too without flooding.
+_DEFAULT_MAX_PER_FILE = 3
+
+
+def _extract_title(abs_path):
+    """Derive a result title: first H1 -> first non-blank body line ->
+    filename slug. Skips YAML frontmatter."""
+    try:
+        with open(abs_path, "r", errors="replace") as f:
+            in_frontmatter = False
+            seen_open_dashes = False
+            for raw in f:
+                line = raw.rstrip("\n")
+                if line.strip() == "---":
+                    if not seen_open_dashes:
+                        in_frontmatter = True
+                        seen_open_dashes = True
+                        continue
+                    if in_frontmatter:
+                        in_frontmatter = False
+                        continue
+                if in_frontmatter:
+                    continue
+                if line.startswith("# "):
+                    return line[2:].strip()
+                if line.strip():
+                    return line.strip()[:80]
+    except Exception:
+        pass
+    base = os.path.splitext(os.path.basename(abs_path))[0]
+    return base.replace("-", " ").replace("_", " ").title()
+
+
 def _search_rg(path, query, max_results=20, glob_pattern=None,
                exclude_inbox=False):
     """Search using ripgrep. Returns list of result dicts."""
     args = [
-        "rg", "--json", "--max-count", "1",
+        "rg", "--json",
+        "--max-count", str(_DEFAULT_MAX_PER_FILE),
         "--glob", "!.git",
     ]
     if exclude_inbox:
@@ -31,6 +66,7 @@ def _search_rg(path, query, max_results=20, glob_pattern=None,
         return []
 
     results = []
+    title_cache = {}
     for line in r.stdout.splitlines():
         try:
             obj = json.loads(line)
@@ -43,14 +79,12 @@ def _search_rg(path, query, max_results=20, glob_pattern=None,
         rel_path = os.path.relpath(abs_path, path)
         line_number = data["line_number"]
         snippet = data["lines"]["text"].strip()
-        # Derive a title from the filename
-        title = os.path.splitext(os.path.basename(rel_path))[0].replace(
-            "-", " "
-        ).replace("_", " ").title()
+        if abs_path not in title_cache:
+            title_cache[abs_path] = _extract_title(abs_path)
         results.append({
             "path": rel_path,
             "line": line_number,
-            "title": title,
+            "title": title_cache[abs_path],
             "snippet": snippet[:200],
             "match_count": 1,
         })
@@ -68,6 +102,7 @@ def _search_python(path, query, max_results=20, glob_pattern=None,
         return []
 
     results = []
+    title_cache = {}
     for dirpath, dirnames, filenames in os.walk(path):
         # Skip .git
         if ".git" in dirnames:
@@ -85,19 +120,21 @@ def _search_python(path, query, max_results=20, glob_pattern=None,
             rel_path = os.path.relpath(fpath, path)
             try:
                 with open(fpath, "r", errors="replace") as f:
+                    matches_in_file = 0
                     for i, line in enumerate(f, 1):
                         if pattern.search(line):
-                            title = os.path.splitext(fname)[0].replace(
-                                "-", " "
-                            ).replace("_", " ").title()
+                            if fpath not in title_cache:
+                                title_cache[fpath] = _extract_title(fpath)
                             results.append({
                                 "path": rel_path,
                                 "line": i,
-                                "title": title,
+                                "title": title_cache[fpath],
                                 "snippet": line.strip()[:200],
                                 "match_count": 1,
                             })
-                            break  # one match per file
+                            matches_in_file += 1
+                            if matches_in_file >= _DEFAULT_MAX_PER_FILE:
+                                break
             except Exception:
                 continue
             if len(results) >= max_results:

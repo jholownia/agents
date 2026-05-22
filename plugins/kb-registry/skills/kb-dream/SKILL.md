@@ -67,8 +67,20 @@ Identify candidate inbox notes. Prefer recent unprocessed material and notes wit
 - `codebase-fact`
 - `runbook-note`
 - `retrospective`
+- `url` — see step 2a
 
 Ignore notes that are redundant, too raw, unsafe, or not worth preserving.
+
+### 2a. Resolve URL pointers
+
+For notes with `kind: url` (frontmatter contains `url: <https://...>`):
+
+1. Fetch the URL. Prefer the `defuddle` skill for HTML articles (returns clean Markdown); fall back to WebFetch for everything else.
+2. If the fetch fails (404, paywall, dead link), record the failure in `LOG.md` and leave the pointer in the inbox; do not delete it.
+3. Synthesise the fetched content into a canonical page under `knowledge/` like any other source. Cite the URL in the page's provenance section.
+4. Once consolidated, mark the URL note processed (move to `inbox/processed/` per the default convention) and reference the resulting canonical page in `LOG.md`.
+
+Treat any agent-supplied description body on a URL pointer as a hint about why the link was saved — useful for choosing the canonical page's framing.
 
 ### 3. Search for existing coverage
 

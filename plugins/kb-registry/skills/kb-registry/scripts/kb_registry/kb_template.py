@@ -94,13 +94,24 @@ Each entry should include:
 INBOX_README = """\
 # Inbox
 
-Staging area for raw or uncertain material.
+Staging area for raw or uncertain material, awaiting consolidation into
+`knowledge/`.
 
-Files here are individual Markdown notes with metadata frontmatter,
-awaiting review and consolidation into `knowledge/`.
+Three shapes of material live here:
 
-Processed notes may be moved under `inbox/processed/` after their durable
-content is synthesized into canonical knowledge.
+- **Notes** — agent-written, semi-structured. Produced by
+  `kb stage --note ...`. YAML frontmatter at top (`kind`, `created_at`,
+  optional `source`/`title`). The note owns its heading.
+- **Documents** — any text file copied verbatim. Produced by
+  `kb stage --file <path>` or by dropping a Markdown file directly into
+  this directory. No frontmatter, no auto-heading. Provenance lives in
+  the git commit message.
+- **URL pointers** — produced by `kb stage --url <url>`. Frontmatter has
+  `kind: url` and `url: <url>`; the next `kb-dream` pass fetches and
+  summarises the link.
+
+Processed material may be moved under `inbox/processed/` after its
+durable content is synthesized into canonical knowledge.
 """
 
 KNOWLEDGE_README = """\

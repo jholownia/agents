@@ -1,25 +1,6 @@
-"""Safety checks: path traversal, secret scanning, canonical write guard."""
+"""Safety checks: path traversal, canonical write guard, binary/large guards."""
 
 import os
-import re
-
-# Patterns that indicate likely secrets
-SECRET_PATTERNS = [
-    (r"AKIA[0-9A-Z]{16}", "AWS access key"),
-    (r"(?i)aws_secret_access_key\s*[=:]\s*\S+", "AWS secret key"),
-    (r"-----BEGIN\s+(RSA\s+|DSA\s+|EC\s+|OPENSSH\s+|PGP\s+)?PRIVATE KEY-----",
-     "Private key"),
-    (r"ghp_[A-Za-z0-9]{36}", "GitHub personal access token"),
-    (r"gho_[A-Za-z0-9]{36}", "GitHub OAuth token"),
-    (r"ghs_[A-Za-z0-9]{36}", "GitHub app token"),
-    (r"github_pat_[A-Za-z0-9_]{22,}", "GitHub fine-grained PAT"),
-    (r"sk-[A-Za-z0-9]{20,}", "OpenAI/Anthropic API key"),
-    (r"sk-ant-[A-Za-z0-9\-]{20,}", "Anthropic API key"),
-    (r"(?i)(?:password|passwd|token|secret|api_key)\s*[=:]\s*\S+",
-     "Generic credential"),
-]
-
-_compiled = [(re.compile(p), desc) for p, desc in SECRET_PATTERNS]
 
 
 def check_path_traversal(kb_root, target_path):
@@ -33,15 +14,6 @@ def check_path_traversal(kb_root, target_path):
     resolved = os.path.realpath(os.path.join(root, target_path))
     # Must be inside root (equal or child)
     return not (resolved == root or resolved.startswith(root + os.sep))
-
-
-def scan_secrets(text):
-    """Scan text for likely secrets. Returns list of matched descriptions."""
-    matches = []
-    for pattern, desc in _compiled:
-        if pattern.search(text):
-            matches.append(desc)
-    return matches
 
 
 def check_canonical_write(kb_root, target_path):

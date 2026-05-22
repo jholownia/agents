@@ -133,10 +133,20 @@ rm -f "$TEST_KB/pre_staged.txt"
 
 echo ""
 echo "--- 6. Safety ---"
-run_fail 3 "reject AWS key" $KB --config "$CONFIG" stage test --note "key is AKIA1234567890ABCDEF"
-run_fail 3 "reject private key" $KB --config "$CONFIG" stage test --note "-----BEGIN PRIVATE KEY-----"
-run_fail 3 "reject OpenSSH private key" $KB --config "$CONFIG" stage test --note "-----BEGIN OPENSSH PRIVATE KEY-----"
-run_fail 3 "reject generic secret" $KB --config "$CONFIG" stage test --note "password=hunter2"
+# v0 no longer scans content for secrets — credentials-discussing docs must stage cleanly.
+run "credential-discussing doc stages cleanly" $KB --config "$CONFIG" stage test --note "examples include password=hunter2 and AKIA1234567890ABCDEF"
+
+# Notes own their headings — the CLI must not prepend one.
+$KB --config "$CONFIG" stage test --note "# Body Heading" --title "Heading Test" >/dev/null 2>&1
+HEADING_NOTE=$(grep -rl "Body Heading" "$TEST_KB/inbox" | head -1)
+HEADING_COUNT=$(grep -c "^# " "$HEADING_NOTE" 2>/dev/null || echo 0)
+if [ "$HEADING_COUNT" -eq 1 ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  stage does not double the heading"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected one H1 in staged note, found $HEADING_COUNT"
+fi
 
 # Frontmatter must survive embedded double-quote in title.
 run "stage note with quoted title" $KB --config "$CONFIG" stage test --note "body" --title 'He said "hi"'
@@ -159,6 +169,71 @@ else
     FAIL=$((FAIL+1))
     echo "  FAIL  --source not in frontmatter (file=$SRC_NOTE)"
 fi
+
+# Documents (--file) are copied verbatim, no frontmatter, no auto-heading.
+DOC_SRC="$TMPDIR/doc-sample.md"
+cat > "$DOC_SRC" <<'DOC'
+# Sample Document
+
+This document was staged via --file. It must land verbatim.
+
+Second paragraph with a `code span` and other content.
+DOC
+run "stage --file (document)" $KB --config "$CONFIG" stage test --file "$DOC_SRC"
+DOC_NOTE=$(find "$TEST_KB/inbox" -name '*doc-sample*.md' | head -1)
+if [ -n "$DOC_NOTE" ] && ! head -1 "$DOC_NOTE" | grep -q '^---$'; then
+    PASS=$((PASS+1))
+    echo "  PASS  document has no frontmatter"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  document has frontmatter (file=$DOC_NOTE)"
+fi
+if [ -n "$DOC_NOTE" ] && diff -q "$DOC_SRC" "$DOC_NOTE" >/dev/null 2>&1; then
+    PASS=$((PASS+1))
+    echo "  PASS  document content verbatim"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  document content differs from source"
+fi
+# Commit message should mention the source filename.
+LAST_COMMIT=$(git -C "$TEST_KB" log -1 --pretty=%s)
+if echo "$LAST_COMMIT" | grep -q "stage document doc-sample.md"; then
+    PASS=$((PASS+1))
+    echo "  PASS  commit message records source filename"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  commit message missing source filename: $LAST_COMMIT"
+fi
+# --note + --file together should error.
+run_fail 2 "--note and --file mutually exclusive" $KB --config "$CONFIG" stage test --note "x" --file "$DOC_SRC"
+
+# --url stages a URL pointer with kind:url and url: in frontmatter, empty body.
+run "stage --url" $KB --config "$CONFIG" stage test --url "https://example.com/articles/why-agents-forget"
+URL_NOTE=$(find "$TEST_KB/inbox" -name '*why-agents-forget*' | head -1)
+if [ -n "$URL_NOTE" ] && grep -q '^kind: "url"$' "$URL_NOTE" && grep -q '^url: "https://example.com/articles/why-agents-forget"$' "$URL_NOTE"; then
+    PASS=$((PASS+1))
+    echo "  PASS  --url writes kind:url + url frontmatter"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  --url frontmatter wrong (file=$URL_NOTE)"
+fi
+
+# --url + --note: description becomes body.
+run "stage --url + --note" $KB --config "$CONFIG" stage test --url "https://blog.example.com/memory" --note "Saved because it argues forgetting is the fix."
+URL_DESC=$(grep -rl "forgetting is the fix" "$TEST_KB/inbox" | head -1)
+if [ -n "$URL_DESC" ] && grep -q '^url: "https://blog.example.com/memory"$' "$URL_DESC"; then
+    PASS=$((PASS+1))
+    echo "  PASS  --url description body landed alongside url frontmatter"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  --url + --note combination broken (file=$URL_DESC)"
+fi
+
+# Invalid URL rejected.
+run_fail 2 "reject non-http URL" $KB --config "$CONFIG" stage test --url "ftp://example.com/x"
+
+# --url + --file mutually exclusive.
+run_fail 2 "--url and --file mutex" $KB --config "$CONFIG" stage test --url "https://example.com/" --file "$DOC_SRC"
 
 echo ""
 echo "--- 7. Search ---"
