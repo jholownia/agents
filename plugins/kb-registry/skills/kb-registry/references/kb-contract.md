@@ -4,18 +4,38 @@
 
 Every knowledge base must contain:
 
-```
+```text
 <kb-root>/
   AGENTS.md       # Agent rules for this KB
   BRIEF.md        # Compact summary — progressive disclosure entrypoint
   INDEX.md        # Navigational index
   LOG.md          # Maintenance and consolidation journal
-  inbox/          # Staging area for raw material
-  knowledge/      # Canonical synthesized knowledge
+  inbox/          # Staging area for raw material (consolidated by kb-dream)
+  knowledge/      # Canonical synthesized knowledge (written by kb-dream)
+  notes/          # Append-only single-paragraph memories with tags
   sources/        # Optional source material or pointers
   tools/          # Reserved for future diagnostics (not executed in v0)
   .gitignore
 ```
+
+### Lifecycle of each directory
+
+- `inbox/` — raw material. Anything here will be consumed by the next `kb-dream` pass into `knowledge/`. Includes notes (`--note`), documents (`--file`), and URL pointers (`--url`).
+- `notes/` — **append-only**, never consolidated. Short single-paragraph facts written by `kb remember`. `kb-dream` never touches this directory.
+- `knowledge/` — synthesised long-form pages. Written by `kb-dream` only. Agents do not edit canonical pages directly outside of a dream pass.
+
+### Three-layer scoping (what goes where)
+
+| Fact | Layer |
+|---|---|
+| Personal user preferences ("I prefer rebase", "I like X") | Claude's auto-memory — NOT the KB |
+| Normative workflow rules ("don't push to master") | `CLAUDE.md` / `AGENTS.md` — NOT the KB |
+| Short project/domain/codebase facts ("EMMA's nightly job runs at 02:00 UTC") | KB `notes/` via `kb remember` |
+| Decisions, runbook material, longer-form facts | KB `inbox/` via `kb stage`, consolidated to `knowledge/` by `kb-dream` |
+| URL pointers to read later | KB `inbox/` via `kb stage --url` |
+| Project TODOs that should survive sessions | KB `inbox/` via `kb stage --kind followup` |
+
+Litmus test for the KB: would re-deriving the fact require meaningful work (grep, ask the user, synthesise across sources)? If yes → KB. If you could just re-ask the user trivially → auto-memory.
 
 ## BRIEF.md
 
@@ -41,9 +61,26 @@ KB-local rules that agents must follow:
 Append a short entry when inbox notes are consolidated into canonical knowledge.
 Entries should record consumed inbox/source paths, canonical pages created or updated, and unresolved questions.
 
+## Notes format
+
+Produced by `kb remember "<text>" [--tags <a,b,c>]`. Stored at `notes/YYYY/MM/<timestamp>-<slug>.md`:
+
+```yaml
+---
+created_at: "2026-05-22T10:30:00+01:00"
+tags: ["emma", "domain"]
+---
+
+EMMA's nightly job runs at 02:00 UTC via cron.
+```
+
+- One fact per file. The text is the body, verbatim.
+- `tags:` is optional but recommended — `kb recall --tag <t>` uses it.
+- `kb-dream` never reads or modifies this directory.
+
 ## Inbox format
 
-The inbox holds two shapes of material, distinguished by how they got there:
+The inbox holds three shapes of material, distinguished by how they got there:
 
 ### Notes (agent-written, semi-structured)
 

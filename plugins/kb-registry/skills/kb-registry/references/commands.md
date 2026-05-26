@@ -85,6 +85,40 @@ Shows: path existence, git status, branch, clean/dirty, remote URL, missing cont
 
 Note: bare `kb status` (no KB name, no `--all`) shows **all** KBs — it does *not* fall back to the default KB. `brief`/`open`/`stage`/`pending` *do* fall back to the default KB when name is omitted.
 
+## remember
+
+Append a short single-paragraph memory to `<kb>/notes/`.
+
+```bash
+kb remember "<text>"
+kb remember "<text>" --tags emma,domain
+kb remember "<text>" --kb <kb>
+```
+
+- Writes to `notes/YYYY/MM/<timestamp>-<slug>.md` with `created_at` and (optional) `tags` frontmatter.
+- The text is the body, verbatim. Notes own their headings (none auto-prepended).
+- Falls back to the default KB if `--kb` is not given.
+- `--no-commit` to skip the auto-commit.
+- Use for **project / domain / codebase facts that are expensive to re-derive but too small for a `knowledge/` page**, e.g. "EMMA's nightly job runs at 02:00 UTC via cron."
+- Do **not** use for personal user preferences ("I prefer rebase", "I like X") — those belong in Claude's auto-memory. The KB is not the right layer.
+- `notes/` is append-only: `kb-dream` never touches it.
+
+## recall
+
+Search synthesised material — both `notes/` and `knowledge/`, **excluding** the raw `inbox/`.
+
+```bash
+kb recall [<kb>] --query "<text>"
+kb recall [<kb>] --tag <tag>
+kb recall --query "<text>" --max-results 5
+```
+
+- `--query` runs lexical (`rg`-backed) search across `notes/` and `knowledge/`.
+- `--tag` lists notes whose frontmatter `tags:` includes the given tag.
+- One of `--query` or `--tag` is required.
+- Defaults: 20 total results.
+- Distinct from `kb search`, which covers the whole KB including the inbox. Use `recall` for "what do we know about X" style questions; use `search` when you specifically need to grep raw material.
+
 ## pending
 
 List unprocessed inbox material.

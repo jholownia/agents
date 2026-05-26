@@ -82,6 +82,8 @@ run "AGENTS.md exists" test -f "$TEST_KB/AGENTS.md"
 run "LOG.md exists" test -f "$TEST_KB/LOG.md"
 run "inbox/ exists" test -d "$TEST_KB/inbox"
 run "knowledge/ exists" test -d "$TEST_KB/knowledge"
+run "notes/ exists" test -d "$TEST_KB/notes"
+run "notes/README.md exists" test -f "$TEST_KB/notes/README.md"
 run "git repo init" git -C "$TEST_KB" rev-parse --git-dir
 
 echo ""
@@ -240,6 +242,62 @@ echo "--- 7. Search ---"
 run "search test" $KB --config "$CONFIG" search test "decision"
 run "search --json" $KB --config "$CONFIG" search test "decision" --json
 run "search all KBs" $KB --config "$CONFIG" search "note"
+
+echo ""
+echo "--- 6b. Remember + Recall ---"
+run "remember emma fact" $KB --config "$CONFIG" remember "EMMA's nightly job runs at 02:00 UTC via cron." --tags emma,runbook
+run "remember codebase fact" $KB --config "$CONFIG" remember "analyze_meter_drift returns null when input has <30 days." --tags codebase,emma
+REM_NOTE=$(find "$TEST_KB/notes" -name '*nightly-job*.md' | head -1)
+if [ -n "$REM_NOTE" ] && grep -q '^created_at:' "$REM_NOTE" && grep -q '^tags: \[' "$REM_NOTE"; then
+    PASS=$((PASS+1))
+    echo "  PASS  remember note has created_at + tags frontmatter"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  remember frontmatter wrong (file=$REM_NOTE)"
+fi
+# Body must be verbatim — no auto-heading prepended.
+if [ -n "$REM_NOTE" ] && ! grep -q "^# " "$REM_NOTE"; then
+    PASS=$((PASS+1))
+    echo "  PASS  remember note has no auto-heading"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  remember note has auto-heading or is missing"
+fi
+
+# recall --tag should find both emma-tagged notes.
+TAG_OUT=$($KB --config "$CONFIG" recall test --tag emma 2>&1)
+EMMA_HITS=$(echo "$TAG_OUT" | grep -c "notes/")
+if [ "$EMMA_HITS" -ge 2 ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  recall --tag emma finds both notes ($EMMA_HITS)"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  recall --tag emma found $EMMA_HITS (expected >=2)"
+fi
+
+# recall --query should find the note by substring.
+QUERY_OUT=$($KB --config "$CONFIG" recall test --query "nightly" 2>&1)
+if echo "$QUERY_OUT" | grep -q "nightly-job"; then
+    PASS=$((PASS+1))
+    echo "  PASS  recall --query finds note by substring"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  recall --query nightly missed: $QUERY_OUT"
+fi
+
+# recall must NOT include inbox content.
+$KB --config "$CONFIG" stage test --note "inbox-only-marker-string" >/dev/null 2>&1
+INBOX_OUT=$($KB --config "$CONFIG" recall test --query "inbox-only-marker-string" 2>&1)
+if echo "$INBOX_OUT" | grep -q "No results"; then
+    PASS=$((PASS+1))
+    echo "  PASS  recall excludes inbox/"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  recall returned inbox content: $INBOX_OUT"
+fi
+
+# recall requires --query or --tag.
+run_fail 2 "recall requires --query or --tag" $KB --config "$CONFIG" recall test
 
 echo ""
 echo "--- 7b. Pending ---"

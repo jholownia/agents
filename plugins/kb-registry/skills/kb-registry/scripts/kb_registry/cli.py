@@ -125,6 +125,31 @@ def _metrics_path(config):
                           "~/.local/state/kb-registry/events.jsonl"))
 
 
+def _first_body_line(path):
+    """Return the first non-blank line *after* YAML frontmatter, or ''."""
+    try:
+        with open(path, "r", errors="replace") as f:
+            in_fm = False
+            seen_open = False
+            for raw in f:
+                line = raw.rstrip("\n")
+                if line.strip() == "---":
+                    if not seen_open:
+                        in_fm = True
+                        seen_open = True
+                        continue
+                    if in_fm:
+                        in_fm = False
+                        continue
+                if in_fm:
+                    continue
+                if line.strip():
+                    return line.strip()[:200]
+    except Exception:
+        pass
+    return ""
+
+
 def _read_frontmatter(path):
     """Best-effort YAML-ish frontmatter parse. Returns dict of str values.
 
@@ -479,6 +504,217 @@ def cmd_pending(args, config, config_path):
             print(f"    {item['path']}")
             if item.get("url"):
                 print(f"    {item['url']}")
+
+    return EXIT_OK
+
+
+def cmd_remember(args, config, config_path):
+    """Append a short single-paragraph memory to <kb>/notes/.
+
+    Notes are append-only: kb-dream never touches them. Use this for
+    project / domain / codebase facts that are expensive to re-derive
+    but too small to deserve a canonical page in knowledge/.
+
+    For personal user preferences ("I like X", "I prefer rebase"),
+    use Claude's auto-memory instead — the KB is not the right layer.
+    """
+    kb, err = _resolve_kb(config, args.kb)
+    if err:
+        print(f"Error: {err}", file=sys.stderr)
+        return EXIT_ARGS
+
+    kb_path = kb["path"]
+    if not os.path.isdir(kb_path):
+        print(f"Error: KB path does not exist: {kb_path}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    if not args.text:
+        print("Error: <text> is required.", file=sys.stderr)
+        return EXIT_ARGS
+
+    tags = []
+    if args.tags:
+        tags = [t.strip() for t in args.tags.split(",") if t.strip()]
+
+    with track_command(_metrics_path(config), "remember",
+                       kb=kb["name"]) as ctx:
+        ctx["tag_count"] = len(tags)
+
+        now = datetime.now(timezone.utc).astimezone()
+        date_dir = now.strftime("%Y/%m")
+        timestamp_slug = now.strftime("%Y%m%d-%H%M%S")
+        slug = _slugify(args.text[:60])
+        filename = f"{timestamp_slug}-{slug}.md"
+        rel_path = os.path.join("notes", date_dir, filename)
+
+        # notes/ must exist (part of the KB contract).
+        notes_root = os.path.join(kb_path, "notes")
+        if not os.path.isdir(notes_root):
+            print(f"Error: notes/ missing under {kb_path}. Run "
+                  f"`mkdir -p {notes_root}` or re-bootstrap.",
+                  file=sys.stderr)
+            ctx["success"] = False
+            return EXIT_FAILURE
+
+        full_path = os.path.join(kb_path, rel_path)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+        def _yaml_str(s):
+            return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+        fm_lines = ["---"]
+        fm_lines.append(f'created_at: {_yaml_str(now.isoformat())}')
+        if tags:
+            tags_yaml = ", ".join(_yaml_str(t) for t in tags)
+            fm_lines.append(f"tags: [{tags_yaml}]")
+        fm_lines.append("---")
+        fm_lines.append("")
+        content = "\n".join(fm_lines) + args.text
+        if not content.endswith("\n"):
+            content += "\n"
+        with open(full_path, "w") as f:
+            f.write(content)
+
+        ctx["path"] = rel_path
+
+        committed = False
+        if not args.no_commit and git_is_repo(kb_path):
+            git_add_files(kb_path, [rel_path])
+            ok, out, rc = git_commit_files(
+                kb_path, "kb: remember note", [rel_path]
+            )
+            committed = ok
+            if not ok:
+                print(f"Warning: commit failed: {out}", file=sys.stderr)
+
+        if args.json:
+            _output({
+                "kb": kb["name"],
+                "path": rel_path,
+                "tags": tags,
+                "committed": committed,
+            }, True)
+        else:
+            print(f"Remembered: {rel_path}")
+
+    return EXIT_OK
+
+
+def cmd_recall(args, config, config_path):
+    """Search synthesised material — notes/ and knowledge/, excluding inbox/.
+
+    Distinct from `kb search`, which searches the whole KB (incl. inbox).
+    Use recall for 'what do we know about X' style questions; the
+    inbox is raw material, not knowledge.
+    """
+    if args.kb:
+        kb, err = _resolve_kb(config, args.kb)
+        if err:
+            print(f"Error: {err}", file=sys.stderr)
+            return EXIT_ARGS
+        targets = [kb]
+    else:
+        targets = config.get("kbs", [])
+        if not targets:
+            print("No KBs registered.", file=sys.stderr)
+            return EXIT_ARGS
+
+    max_results = args.max_results or DEFAULT_SEARCH_MAX
+
+    all_results = []
+    for kb in targets:
+        kb_path = kb["path"]
+        if not os.path.isdir(kb_path):
+            continue
+        # Tag-only filtering: walk notes/ and pick files whose
+        # frontmatter tags include args.tag.
+        if args.tag and not args.query:
+            tag = args.tag.strip()
+            notes_root = os.path.join(kb_path, "notes")
+            if not os.path.isdir(notes_root):
+                continue
+            for dp, dns, fns in os.walk(notes_root):
+                for fname in sorted(fns):
+                    if not fname.endswith(".md") or fname == "README.md":
+                        continue
+                    full = os.path.join(dp, fname)
+                    meta = _read_frontmatter(full)
+                    raw_tags = meta.get("tags", "")
+                    if not raw_tags:
+                        continue
+                    # Frontmatter parser returned a single string for the
+                    # `tags: [..]` line. Strip brackets/quotes.
+                    cleaned = raw_tags.strip().lstrip("[").rstrip("]")
+                    file_tags = [
+                        t.strip().strip('"').strip("'")
+                        for t in cleaned.split(",")
+                    ]
+                    if tag in file_tags:
+                        rel_path = os.path.relpath(full, kb_path)
+                        snippet = _first_body_line(full)
+                        all_results.append({
+                            "kb": kb["name"],
+                            "path": rel_path,
+                            "title": _extract_title(full),
+                            "tags": file_tags,
+                            "snippet": snippet,
+                        })
+            continue
+
+        # Query-driven path: lexical search restricted to notes/ + knowledge/.
+        if not args.query:
+            print("Error: provide --query or --tag.", file=sys.stderr)
+            return EXIT_ARGS
+
+        # search_kb already excludes .git and (optionally) inbox.
+        # We need to additionally exclude sources/ and tools/.
+        # search.py exposes exclude_inbox; for now build two scoped
+        # searches and merge.
+        sub_results = []
+        for sub_dir in ("notes", "knowledge"):
+            scoped_root = os.path.join(kb_path, sub_dir)
+            if not os.path.isdir(scoped_root):
+                continue
+            sub = search_kb(
+                scoped_root, args.query,
+                max_results=max_results,
+                glob_pattern=None,
+                exclude_inbox=False,  # nothing called inbox below here
+            )
+            for r in sub:
+                # Re-anchor path to kb root.
+                r["path"] = os.path.join(sub_dir, r["path"])
+                r["kb"] = kb["name"]
+                sub_results.append(r)
+        all_results.extend(sub_results)
+        if len(all_results) >= max_results:
+            all_results = all_results[:max_results]
+            break
+
+    all_results = all_results[:max_results]
+
+    with track_command(_metrics_path(config), "recall",
+                       kb=args.kb) as ctx:
+        ctx["query"] = args.query
+        ctx["tag"] = args.tag
+        ctx["result_count"] = len(all_results)
+
+        if args.json:
+            _output(all_results, True)
+            return EXIT_OK
+
+        if not all_results:
+            print("No results.")
+            return EXIT_OK
+
+        for r in all_results:
+            kb_name = r.get("kb", "?")
+            tags = r.get("tags")
+            tags_str = f" [{', '.join(tags)}]" if tags else ""
+            snippet = r.get("snippet", "")[:80]
+            line = r.get("line")
+            loc = f"{r['path']}" + (f":{line}" if line else "")
+            print(f"  [{kb_name}] {loc}{tags_str}  {snippet}")
 
     return EXIT_OK
 
@@ -941,6 +1177,30 @@ def build_parser():
     p.add_argument("kb", nargs="?")
     p.add_argument("--max-results", type=int)
 
+    # remember
+    p = sub.add_parser(
+        "remember",
+        help="Append a short single-paragraph memory to <kb>/notes/.",
+        parents=[shared],
+    )
+    p.add_argument("text",
+                   help="The fact to remember. Should be one sentence.")
+    p.add_argument("--kb", dest="kb",
+                   help="Target KB (defaults to the default KB).")
+    p.add_argument("--tags", help="Comma-separated tag list.")
+    p.add_argument("--no-commit", action="store_true")
+
+    # recall
+    p = sub.add_parser(
+        "recall",
+        help="Search synthesised material (notes/ + knowledge/, excl. inbox).",
+        parents=[shared],
+    )
+    p.add_argument("kb", nargs="?")
+    p.add_argument("--query", help="Lexical query.")
+    p.add_argument("--tag", help="Restrict to notes carrying this tag.")
+    p.add_argument("--max-results", type=int)
+
     # brief
     p = sub.add_parser("brief", help="Print compact KB summary.",
                        parents=[shared])
@@ -1025,6 +1285,8 @@ def main():
         "list": cmd_list,
         "status": cmd_status,
         "pending": cmd_pending,
+        "remember": cmd_remember,
+        "recall": cmd_recall,
         "brief": cmd_brief,
         "open": cmd_open,
         "search": cmd_search,

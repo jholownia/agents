@@ -11,15 +11,28 @@ description: >
 
 ## When to use
 
-- You suspect durable project/domain knowledge exists (architecture, domain rules, past decisions).
-- You discover a fact worth preserving across conversations.
-- You need context that goes beyond what the current repo contains.
+Use the KB for facts that are **expensive to re-derive** — facts that took grepping, reading across files, asking the user, or synthesising multiple sources to discover. Cheap-to-re-ask facts belong elsewhere.
+
+### Three-layer routing — where does this fact go?
+
+| Fact | Layer |
+|---|---|
+| Personal user preferences ("I prefer rebase", "I like X") | Claude's **auto-memory** — NOT the KB |
+| Normative workflow rules ("don't push to master") | **CLAUDE.md** / **AGENTS.md** — NOT the KB |
+| Short project / domain / codebase facts ("EMMA's nightly job runs at 02:00 UTC") | KB `notes/` via `kb remember` |
+| Decisions, runbook material, longer-form facts | KB `inbox/` via `kb stage`, consolidated to `knowledge/` by `kb-dream` |
+| URL pointers to read later | KB `inbox/` via `kb stage --url` |
+| Project TODOs that should survive sessions | KB `inbox/` via `kb stage --kind followup` |
+
+**Litmus test:** would re-deriving this fact require meaningful work? Yes → KB. Could just re-ask the user trivially → auto-memory.
 
 ## When NOT to use
 
 - For ephemeral conversation state — use tasks or plans instead.
 - For code that belongs in the project repo.
 - For secrets, credentials, or private personal data.
+- For personal user preferences — those are auto-memory's job.
+- For team workflow rules — those belong in `CLAUDE.md` / `AGENTS.md`.
 
 ## Progressive disclosure
 
@@ -28,17 +41,30 @@ Always follow this retrieval order — do not skip steps:
 1. `kb list` — discover which KBs exist.
 2. `kb brief <kb>` — read the compact summary before searching.
 3. `kb pending <kb>` — list unprocessed inbox material when picking up where a previous session left off.
-4. `kb search <kb> "<query>"` — find specific knowledge.
-5. `kb open <kb> <path>` — read a specific file only when you know the path.
-6. Direct repo inspection only if the KB is insufficient.
+4. `kb recall [<kb>] --query "<text>"` — preferred for "what do we know about X" questions; searches synthesised material (`notes/` + `knowledge/`) only.
+5. `kb recall [<kb>] --tag <tag>` — filter notes by tag.
+6. `kb search <kb> "<query>"` — wider net; includes the raw inbox. Use when recall comes up empty or you specifically need raw material.
+7. `kb open <kb> <path>` — read a specific file only when you know the path.
+8. Direct repo inspection only if the KB is insufficient.
 
 ### Search tokenization
 
-`kb search` is **lexical** and treats its query as a regex pattern. A quoted multi-word phrase must match the file *exactly* — if a phrase returns zero results, retry with single keywords or two-token slices. Searches default to 20 total results / 3 matches per file.
+Both `kb recall --query` and `kb search` are **lexical** and treat the query as a regex pattern. A quoted multi-word phrase must match the file *exactly* — if a phrase returns zero results, retry with single keywords or two-token slices. Searches default to 20 total results / 3 matches per file.
 
-## Staging knowledge
+## Capturing knowledge
 
-Three staging shapes — choose the one that fits the material:
+There are two write paths into the KB; they go to different places and have different lifecycles.
+
+### `kb remember` — short memories (`notes/`)
+
+```bash
+kb remember "<one-sentence fact>"
+kb remember "<one-sentence fact>" --tags emma,domain
+```
+
+For short project / domain / codebase facts that are expensive to re-derive but too small for a `knowledge/` page. Written to `notes/YYYY/MM/...` with `tags:` and `created_at:` frontmatter. **`notes/` is append-only — `kb-dream` never touches it.**
+
+### `kb stage` — inbox material for `kb-dream`
 
 ```bash
 kb stage <kb> --note "<text>"                      # short agent-written note
@@ -54,6 +80,12 @@ Note kinds: `decision`, `domain-fact`, `codebase-fact`, `runbook-note`, `retrosp
 - URL pointers must be `http://` or `https://`. They are **not fetched at stage time** — `kb-dream` resolves them during consolidation.
 - Use `--title` for a descriptive heading on notes. All stages auto-commit to `inbox/`.
 - Use `--kind followup` for deferred work the next session should pick up (e.g. "remember to gather more sources on X").
+
+### Which path?
+
+- A fact you'd want to look up later by tag or substring → `kb remember`.
+- Material that should be consolidated into a long-form canonical page → `kb stage`.
+- An article / file / URL that the next `kb-dream` should ingest → `kb stage --url` / `--file`.
 
 ## Rules
 

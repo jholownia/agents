@@ -91,6 +91,37 @@ Each entry should include:
 - unresolved questions or follow-up work
 """
 
+NOTES_README = """\
+# Notes
+
+Short, single-paragraph project / domain / codebase facts that are expensive
+to re-derive but too small to deserve a canonical page in `knowledge/`.
+
+Examples of what belongs here:
+
+- "EMMA's nightly job runs at 02:00 UTC via cron."
+- "The `analyze_meter_drift` function returns null when input has <30 days
+  of data."
+- "We tried PostgreSQL JSON columns in 2024 and abandoned them — search
+  latency was 3x."
+
+Format: one Markdown file per note at
+`notes/<YYYY>/<MM>/<timestamp>-<slug>.md`, with `tags:` and `created_at:`
+frontmatter and the fact as the body.
+
+This directory is **append-only**: `kb-dream` never touches it. Notes here
+are final, not raw material.
+
+What does NOT belong here:
+
+- Personal user preferences ("I like X", "I prefer rebase over merge") —
+  use Claude's auto-memory, not the KB.
+- Normative workflow rules ("don't push to master") — use CLAUDE.md or
+  AGENTS.md.
+- Long-form synthesised knowledge — write to `knowledge/` via `kb-dream`.
+- Material that needs further processing — stage to `inbox/` instead.
+"""
+
 INBOX_README = """\
 # Inbox
 
@@ -150,7 +181,7 @@ Thumbs.db
 
 # Required contract files/dirs
 CONTRACT_FILES = ["AGENTS.md", "BRIEF.md", "INDEX.md", "LOG.md"]
-CONTRACT_DIRS = ["inbox", "knowledge", "sources", "tools"]
+CONTRACT_DIRS = ["inbox", "knowledge", "notes", "sources", "tools"]
 
 
 def create_kb(path, name):
@@ -170,6 +201,7 @@ def create_kb(path, name):
     _write("LOG.md", LOG_MD)
     _write("inbox/README.md", INBOX_README)
     _write("knowledge/README.md", KNOWLEDGE_README)
+    _write("notes/README.md", NOTES_README)
     _write("sources/README.md", SOURCES_README)
     _write("tools/README.md", TOOLS_README)
     _write(".gitignore", GITIGNORE)
