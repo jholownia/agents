@@ -83,7 +83,25 @@ kb status --all
 
 Shows: path existence, git status, branch, clean/dirty, remote URL, missing contract files.
 
-Note: bare `kb status` (no KB name, no `--all`) shows **all** KBs — it does *not* fall back to the default KB. `brief`/`open`/`stage` *do* fall back to the default KB when name is omitted.
+Note: bare `kb status` (no KB name, no `--all`) shows **all** KBs — it does *not* fall back to the default KB. `brief`/`open`/`stage`/`pending` *do* fall back to the default KB when name is omitted.
+
+## pending
+
+List unprocessed inbox material.
+
+```bash
+kb pending [<kb>]
+kb pending <kb> --max-results 10
+kb pending --json
+```
+
+- Walks `<kb>/inbox/`, skipping `inbox/processed/` and `README.md`.
+- Reports `[<kind>] <title>` plus relative path; URL pointers also print the URL.
+- Title comes from frontmatter `title`, then the file's first H1, then a filename slug.
+- Sorted most-recent-first by frontmatter `created_at` (ISO sorts lexically).
+- Falls back to the default KB if no name is given.
+
+Useful as a "what was I in the middle of?" check when picking up where a previous session left off.
 
 ## brief
 

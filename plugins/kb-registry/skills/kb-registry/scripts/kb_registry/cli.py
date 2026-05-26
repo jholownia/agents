@@ -47,7 +47,7 @@ from .safety import (
     check_large_file,
     check_path_traversal,
 )
-from .search import search_kb
+from .search import _extract_title, search_kb
 
 # Exit codes
 EXIT_OK = 0
@@ -63,7 +63,7 @@ DEFAULT_SEARCH_MAX = 20
 
 STAGE_KINDS = [
     "decision", "domain-fact", "codebase-fact",
-    "runbook-note", "retrospective", "raw-note",
+    "runbook-note", "retrospective", "followup", "raw-note",
 ]
 
 
@@ -123,6 +123,39 @@ def _metrics_path(config):
     return config.get("metrics_path",
                       os.path.expanduser(
                           "~/.local/state/kb-registry/events.jsonl"))
+
+
+def _read_frontmatter(path):
+    """Best-effort YAML-ish frontmatter parse. Returns dict of str values.
+
+    Recognises double-quoted strings (the format kb stage emits). Skips
+    `null` / empty values. Stops at the second `---` line.
+    """
+    out = {}
+    try:
+        with open(path, "r", errors="replace") as f:
+            first = f.readline().rstrip("\n")
+            if first.strip() != "---":
+                return out
+            for line in f:
+                line = line.rstrip("\n")
+                if line.strip() == "---":
+                    break
+                if ":" not in line:
+                    continue
+                k, _, v = line.partition(":")
+                k = k.strip()
+                v = v.strip()
+                if v.startswith('"') and v.endswith('"'):
+                    v = v[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+                elif v.startswith("'") and v.endswith("'"):
+                    v = v[1:-1]
+                if v in ("", "null"):
+                    continue
+                out[k] = v
+    except Exception:
+        pass
+    return out
 
 
 # --- Subcommands ---
@@ -378,6 +411,74 @@ def cmd_status(args, config, config_path):
                 print(f"  {info['name']}{default}: "
                       f"{' | '.join(status_parts)}")
                 print(f"    {info['path']}")
+
+    return EXIT_OK
+
+
+def cmd_pending(args, config, config_path):
+    """List unprocessed inbox material across a KB.
+
+    Walks `<kb>/inbox/`, skipping `inbox/processed/` and `README.md`.
+    For each note, reports kind (from frontmatter, falling back to
+    'document' for files with no frontmatter) and a display title (from
+    frontmatter `title`, first H1, or filename slug).
+    """
+    kb, err = _resolve_kb(config, args.kb)
+    if err:
+        print(f"Error: {err}", file=sys.stderr)
+        return EXIT_ARGS
+
+    inbox_root = os.path.join(kb["path"], "inbox")
+    if not os.path.isdir(inbox_root):
+        print(f"Error: inbox/ missing under {kb['path']}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    items = []
+    for dirpath, dirnames, filenames in os.walk(inbox_root):
+        rel_dir = os.path.relpath(dirpath, inbox_root)
+        if rel_dir == "processed" or rel_dir.startswith(
+                "processed" + os.sep):
+            dirnames[:] = []
+            continue
+        for fname in sorted(filenames):
+            if not fname.endswith(".md") or fname == "README.md":
+                continue
+            full = os.path.join(dirpath, fname)
+            rel_path = os.path.relpath(full, kb["path"])
+            meta = _read_frontmatter(full)
+            kind = meta.get("kind") or "document"
+            title = meta.get("title") or _extract_title(full)
+            items.append({
+                "path": rel_path,
+                "kind": kind,
+                "title": title,
+                "created_at": meta.get("created_at", ""),
+                "url": meta.get("url"),
+            })
+
+    # Most recent first; created_at is ISO and sorts lexically.
+    items.sort(key=lambda x: x.get("created_at") or x["path"], reverse=True)
+
+    if args.max_results:
+        items = items[:args.max_results]
+
+    with track_command(_metrics_path(config), "pending",
+                       kb=kb["name"]) as ctx:
+        ctx["result_count"] = len(items)
+
+        if args.json:
+            _output(items, True)
+            return EXIT_OK
+
+        if not items:
+            print("No pending inbox material.")
+            return EXIT_OK
+
+        for item in items:
+            print(f"  [{item['kind']}] {item['title']}")
+            print(f"    {item['path']}")
+            if item.get("url"):
+                print(f"    {item['url']}")
 
     return EXIT_OK
 
@@ -831,6 +932,15 @@ def build_parser():
     p.add_argument("--all", action="store_true")
     p.add_argument("--fetch", action="store_true")
 
+    # pending
+    p = sub.add_parser(
+        "pending",
+        help="List unprocessed inbox material (excludes inbox/processed/).",
+        parents=[shared],
+    )
+    p.add_argument("kb", nargs="?")
+    p.add_argument("--max-results", type=int)
+
     # brief
     p = sub.add_parser("brief", help="Print compact KB summary.",
                        parents=[shared])
@@ -914,6 +1024,7 @@ def main():
         "remove": cmd_remove,
         "list": cmd_list,
         "status": cmd_status,
+        "pending": cmd_pending,
         "brief": cmd_brief,
         "open": cmd_open,
         "search": cmd_search,

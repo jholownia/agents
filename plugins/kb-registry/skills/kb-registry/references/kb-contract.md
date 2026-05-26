@@ -64,7 +64,7 @@ Content here.
 Frontmatter fields:
 
 - `created_at` — ISO timestamp.
-- `kind` — one of `decision`, `domain-fact`, `codebase-fact`, `runbook-note`, `retrospective`, `raw-note`, or `url`.
+- `kind` — one of `decision`, `domain-fact`, `codebase-fact`, `runbook-note`, `retrospective`, `followup`, `raw-note`, or `url`.
 - `source` *(optional)* — short provenance string (e.g. `"discussion-123"`, `"external research"`).
 - `title` *(optional)* — display title.
 - `url` *(url notes only)* — the staged URL.

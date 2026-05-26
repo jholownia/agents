@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-KB="python3 plugins/kb-registry/skills/kb-registry/scripts/kb"
+KB="python3 plugins/kb-registry/bin/kb"
 TMPDIR=$(mktemp -d)
 CONFIG="$TMPDIR/registry.json"
 METRICS="$TMPDIR/events.jsonl"
@@ -240,6 +240,51 @@ echo "--- 7. Search ---"
 run "search test" $KB --config "$CONFIG" search test "decision"
 run "search --json" $KB --config "$CONFIG" search test "decision" --json
 run "search all KBs" $KB --config "$CONFIG" search "note"
+
+echo ""
+echo "--- 7b. Pending ---"
+# pending should list inbox items but skip inbox/processed/.
+mkdir -p "$TEST_KB/inbox/processed/2026/05"
+cat > "$TEST_KB/inbox/processed/2026/05/already-processed.md" <<'PROCESSED'
+---
+kind: "decision"
+title: "Already processed"
+---
+
+# Already processed
+
+Body.
+PROCESSED
+git -C "$TEST_KB" add inbox/processed/ >/dev/null 2>&1
+git -C "$TEST_KB" commit -m "test: pre-existing processed note" >/dev/null 2>&1
+
+PENDING_OUT=$($KB --config "$CONFIG" pending test 2>&1)
+if echo "$PENDING_OUT" | grep -q "Test decision note"; then
+    PASS=$((PASS+1))
+    echo "  PASS  pending lists inbox notes"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  pending missed inbox notes: $PENDING_OUT"
+fi
+if echo "$PENDING_OUT" | grep -q "Already processed"; then
+    FAIL=$((FAIL+1))
+    echo "  FAIL  pending included inbox/processed/"
+else
+    PASS=$((PASS+1))
+    echo "  PASS  pending skips inbox/processed/"
+fi
+
+PENDING_JSON=$($KB --config "$CONFIG" pending test --json 2>&1)
+if echo "$PENDING_JSON" | python3 -c "import json,sys; data=json.load(sys.stdin); assert isinstance(data, list) and len(data) > 0" 2>/dev/null; then
+    PASS=$((PASS+1))
+    echo "  PASS  pending --json is a non-empty array"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  pending --json shape wrong"
+fi
+
+# followup kind must be accepted.
+run "stage --kind followup" $KB --config "$CONFIG" stage test --kind followup --note "Remember to gather more sources on X."
 
 echo ""
 echo "--- 8. Open + path traversal ---"
