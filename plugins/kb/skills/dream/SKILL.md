@@ -1,13 +1,12 @@
 ---
-name: kb-dream
+name: dream
 description: >
-  Use when asked to consolidate, organize, compile, dream over, or maintain a
-  kb-registry knowledge base. Turns staged inbox notes into KB-specific
-  canonical knowledge using the KB's own AGENTS.md, BRIEF.md, INDEX.md, and
-  existing structure instead of imposing a global taxonomy.
+  Consolidate a KB's inbox into canonical knowledge/ pages. Dry-run-
+  first: produces a plan before any apply. Triggers: "consolidate <kb>",
+  "compile the inbox for <kb>", "organise <kb>", "dream pass on <kb>".
 ---
 
-# KB Dream
+# kb:dream
 
 ## Purpose
 

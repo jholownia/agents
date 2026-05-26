@@ -1,8 +1,0 @@
-{
-  "name": "kb-registry",
-  "description": "Manage agent-maintained knowledge bases — persistent, scoped, searchable, git-backed.",
-  "version": "0.1.0",
-  "author": {
-    "name": "jholownia"
-  }
-}

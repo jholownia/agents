@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Lightweight repeatable validation for kb-registry.
-# Run from the agents repo root:  bash plugins/kb-registry/skills/kb-registry/scripts/test_kb_registry.sh
+# Lightweight repeatable validation for the kb plugin.
+# Run from the agents repo root:  bash plugins/kb/scripts/test_kb_registry.sh
 #
 # Uses a temporary config and a temporary KB by default.
 # Set KB_REGISTRY_TEST_KB=../test-kb to validate against a chosen path.
@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-KB="python3 plugins/kb-registry/bin/kb"
+KB="python3 plugins/kb/bin/kb"
 TMPDIR=$(mktemp -d)
 CONFIG="$TMPDIR/registry.json"
 METRICS="$TMPDIR/events.jsonl"
@@ -455,15 +455,33 @@ fi
 
 echo ""
 echo "--- 14. Plugin structure ---"
-run "plugin.json exists" test -f plugins/kb-registry/.claude-plugin/plugin.json
-run "SKILL.md exists" test -f plugins/kb-registry/skills/kb-registry/SKILL.md
-run "kb-dream SKILL.md exists" test -f plugins/kb-registry/skills/kb-dream/SKILL.md
-run "plugin.json valid JSON" python3 -c "import json; json.load(open('plugins/kb-registry/.claude-plugin/plugin.json'))"
-run "marketplace registered" python3 -c "
+run "plugin.json exists" test -f plugins/kb/.claude-plugin/plugin.json
+run "bin/kb exists" test -x plugins/kb/bin/kb
+run "registry SKILL.md exists" test -f plugins/kb/skills/registry/SKILL.md
+run "info SKILL.md exists" test -f plugins/kb/skills/info/SKILL.md
+run "remember SKILL.md exists" test -f plugins/kb/skills/remember/SKILL.md
+run "stage SKILL.md exists" test -f plugins/kb/skills/stage/SKILL.md
+run "recall SKILL.md exists" test -f plugins/kb/skills/recall/SKILL.md
+run "retrospective SKILL.md exists" test -f plugins/kb/skills/retrospective/SKILL.md
+run "dream SKILL.md exists" test -f plugins/kb/skills/dream/SKILL.md
+run "shared references/ exists" test -d plugins/kb/references
+run "plugin.json valid JSON" python3 -c "import json; json.load(open('plugins/kb/.claude-plugin/plugin.json'))"
+run "marketplace registered as kb" python3 -c "
 import json
 d = json.load(open('.claude-plugin/marketplace.json'))
-assert any(p['name'] == 'kb-registry' for p in d['plugins'])
+assert any(p['name'] == 'kb' for p in d['plugins'])
 "
+# Each skill SKILL.md must have YAML frontmatter with name and description.
+for skill in registry info remember stage recall retrospective dream; do
+    SKILL="plugins/kb/skills/$skill/SKILL.md"
+    if head -10 "$SKILL" | grep -q "^name: $skill$" && head -10 "$SKILL" | grep -q "^description:"; then
+        PASS=$((PASS+1))
+        echo "  PASS  $skill SKILL.md frontmatter"
+    else
+        FAIL=$((FAIL+1))
+        echo "  FAIL  $skill SKILL.md frontmatter (name: $skill or description: missing)"
+    fi
+done
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

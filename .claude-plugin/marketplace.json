@@ -8,10 +8,10 @@
   },
   "plugins": [
     {
-      "name": "kb-registry",
-      "description": "Manage agent-maintained knowledge bases — persistent, scoped, searchable, git-backed.",
-      "source": "./plugins/kb-registry",
-      "version": "0.1.0"
+      "name": "kb",
+      "description": "Agent-maintained knowledge bases — persistent, scoped, searchable, git-backed. Scoped skills (registry, info, remember, stage, recall, dream) over a shared `kb` CLI.",
+      "source": "./plugins/kb",
+      "version": "0.2.0"
     }
   ]
 }

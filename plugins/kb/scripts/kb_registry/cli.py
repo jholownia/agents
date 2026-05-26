@@ -1117,10 +1117,10 @@ def build_parser():
 
     parser = argparse.ArgumentParser(
         prog="kb",
-        description="KB Registry — manage agent-maintained knowledge bases.",
+        description="kb — manage agent-maintained knowledge bases.",
     )
     parser.add_argument("--version", action="version",
-                        version=f"kb-registry {__version__}")
+                        version=f"kb {__version__}")
     # Top-level --config/--json for bare "kb --help" or "kb --json list"
     parser.add_argument("--config", dest="config_path", default=None,
                         help=argparse.SUPPRESS)
