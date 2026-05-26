@@ -1,4 +1,4 @@
-# KB Registry — Command Reference
+# kb — Command Reference
 
 ## Global flags
 
@@ -11,6 +11,25 @@ kb --version
 ```
 
 `--json` produces machine-readable JSON output where supported.
+
+## Config and default-KB resolution
+
+The CLI honours Claude Code plugin config (per-repo or user-scope) via the standard `pluginConfigs.kb.options` → `CLAUDE_PLUGIN_OPTION_*` env var bridge.
+
+**Registry config path** — first set source wins:
+
+1. `--config <path>` flag
+2. `KB_REGISTRY_CONFIG` env var
+3. `CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH` (set via `pluginConfigs.kb.options.registry_config_path` in `.claude/settings.json`)
+4. `~/.config/kb-registry/registry.json` (default)
+
+**Default KB** (when a command's positional/--kb is omitted):
+
+1. The explicit positional or `--kb <name>` argument
+2. `CLAUDE_PLUGIN_OPTION_DEFAULT_KB` (set via `pluginConfigs.kb.options.default_kb` in `.claude/settings.json`)
+3. The registry entry marked `"default": true`
+
+Use the project-scope `.claude/settings.json` to bind a different KB per repo without touching the global registry.
 
 ## Exit codes
 

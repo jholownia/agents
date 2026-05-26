@@ -18,6 +18,7 @@ from .config import (
     make_kb_entry,
     remove_kb,
     resolve_config_path,
+    resolve_default_kb_name,
     save_config,
 )
 from .git_ops import (
@@ -82,11 +83,26 @@ def _output(data, as_json):
 
 
 def _resolve_kb(config, name):
-    """Resolve KB by name or default. Returns (kb_entry, error_msg)."""
+    """Resolve KB by name or fall back to the project/user default.
+
+    Order when name is empty:
+      1. $CLAUDE_PLUGIN_OPTION_DEFAULT_KB (project- or user-scope pluginConfigs)
+      2. The KB entry marked `"default": true` in the registry.
+
+    Returns (kb_entry, error_msg).
+    """
     if name:
         kb = find_kb(config, name)
         if not kb:
             return None, f"KB '{name}' not found in registry."
+        return kb, None
+    plugin_default = resolve_default_kb_name()
+    if plugin_default:
+        kb = find_kb(config, plugin_default)
+        if not kb:
+            return None, (f"KB '{plugin_default}' (from "
+                          "CLAUDE_PLUGIN_OPTION_DEFAULT_KB) not found in "
+                          "registry.")
         return kb, None
     kb = get_default_kb(config)
     if not kb:
@@ -1204,13 +1220,13 @@ def build_parser():
     # brief
     p = sub.add_parser("brief", help="Print compact KB summary.",
                        parents=[shared])
-    p.add_argument("kb")
+    p.add_argument("kb", nargs="?")
     p.add_argument("--max-chars", type=int)
 
     # open
     p = sub.add_parser("open", help="Open a KB file by relative path.",
                        parents=[shared])
-    p.add_argument("kb")
+    p.add_argument("kb", nargs="?")
     p.add_argument("path")
     p.add_argument("--max-chars", type=int)
 
@@ -1230,7 +1246,7 @@ def build_parser():
         help="Stage a note (--note), document (--file), or URL pointer (--url).",
         parents=[shared],
     )
-    p.add_argument("kb")
+    p.add_argument("kb", nargs="?")
     p.add_argument("--note", help="Note body, or description when paired with --url.")
     p.add_argument("--file", help="Path to a text file; staged verbatim.")
     p.add_argument("--url", help="URL pointer; kb-dream fetches/summarises later.")
@@ -1299,7 +1315,11 @@ def main():
         parser.print_help()
         return EXIT_ARGS
 
-    return handler(args, config, config_path)
+    try:
+        return handler(args, config, config_path)
+    except OSError as exc:
+        print(f"Error: filesystem operation failed: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
 
 
 if __name__ == "__main__":

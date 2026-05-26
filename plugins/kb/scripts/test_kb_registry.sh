@@ -402,6 +402,70 @@ else
 fi
 
 echo ""
+echo "--- 11d. CLAUDE_PLUGIN_OPTION_* env var bridge ---"
+# Set up two KBs in a fresh config so we can test which one wins.
+BRIDGE_CONFIG="$TMPDIR/bridge.json"
+cat > "$BRIDGE_CONFIG" <<JSON
+{"version": 1, "default_kb_root": "$TMPDIR/bridge", "metrics_path": "$METRICS", "kbs": []}
+JSON
+mkdir -p "$TMPDIR/bridge"
+$KB --config "$BRIDGE_CONFIG" bootstrap alpha --path "$TMPDIR/bridge/alpha-kb" >/dev/null 2>&1
+$KB --config "$BRIDGE_CONFIG" bootstrap beta --path "$TMPDIR/bridge/beta-kb" >/dev/null 2>&1
+# alpha was first so it carries default:true; bare `kb brief` returns alpha.
+DEFAULT_OUT=$($KB --config "$BRIDGE_CONFIG" brief 2>&1 | head -1)
+if echo "$DEFAULT_OUT" | grep -q "alpha"; then
+    PASS=$((PASS+1))
+    echo "  PASS  registry default resolves bare brief to alpha"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected alpha, got: $DEFAULT_OUT"
+fi
+# CLAUDE_PLUGIN_OPTION_DEFAULT_KB overrides the registry default.
+ENV_OUT=$(CLAUDE_PLUGIN_OPTION_DEFAULT_KB=beta $KB --config "$BRIDGE_CONFIG" brief 2>&1 | head -1)
+if echo "$ENV_OUT" | grep -q "beta"; then
+    PASS=$((PASS+1))
+    echo "  PASS  CLAUDE_PLUGIN_OPTION_DEFAULT_KB overrides registry default"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected beta via env, got: $ENV_OUT"
+fi
+# Explicit positional wins over env.
+FLAG_OUT=$(CLAUDE_PLUGIN_OPTION_DEFAULT_KB=beta $KB --config "$BRIDGE_CONFIG" brief alpha 2>&1 | head -1)
+if echo "$FLAG_OUT" | grep -q "alpha"; then
+    PASS=$((PASS+1))
+    echo "  PASS  explicit positional KB wins over env var"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected alpha via flag, got: $FLAG_OUT"
+fi
+# Env pointing at nonexistent KB errors clearly.
+run_fail 2 "env var pointing at unknown KB exits 2" \
+    env CLAUDE_PLUGIN_OPTION_DEFAULT_KB=ghost $KB --config "$BRIDGE_CONFIG" brief
+
+# CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH redirects the config file.
+EMPTY_CONFIG="$TMPDIR/empty-bridge.json"
+cat > "$EMPTY_CONFIG" <<JSON
+{"version": 1, "default_kb_root": "$TMPDIR", "metrics_path": "$METRICS", "kbs": []}
+JSON
+PATH_OUT=$(CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH="$EMPTY_CONFIG" $KB list 2>&1)
+if echo "$PATH_OUT" | grep -q "No KBs registered"; then
+    PASS=$((PASS+1))
+    echo "  PASS  CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH honoured"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected empty list via env path, got: $PATH_OUT"
+fi
+# --config wins over CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH.
+PRECEDENCE_OUT=$(CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH="$EMPTY_CONFIG" $KB --config "$BRIDGE_CONFIG" list 2>&1)
+if echo "$PRECEDENCE_OUT" | grep -q "alpha"; then
+    PASS=$((PASS+1))
+    echo "  PASS  --config wins over CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected --config precedence, got: $PRECEDENCE_OUT"
+fi
+
+echo ""
 echo "--- 12. --config works from top-level ---"
 # Verify top-level --config is honored and not ignored
 ALT_CONFIG="$TMPDIR/alt-config.json"

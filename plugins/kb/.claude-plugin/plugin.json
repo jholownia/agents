@@ -1,8 +1,20 @@
 {
   "name": "kb",
-  "description": "Agent-maintained knowledge bases — persistent, scoped, searchable, git-backed. Provides scoped skills (registry, info, remember, stage, recall, dream) over a shared `kb` CLI.",
+  "description": "Agent-maintained knowledge bases — persistent, scoped, searchable, git-backed. Provides scoped skills (registry, info, remember, stage, recall, retrospective, dream) over a shared `kb` CLI.",
   "version": "0.2.0",
   "author": {
     "name": "jholownia"
+  },
+  "userConfig": {
+    "default_kb": {
+      "type": "string",
+      "title": "Default KB for this scope",
+      "description": "Name of the KB to use when no --kb flag is given. Project-scope settings take precedence over user-scope; set per-repo by adding pluginConfigs.kb.options.default_kb in .claude/settings.json."
+    },
+    "registry_config_path": {
+      "type": "string",
+      "title": "Registry config path",
+      "description": "Path to the JSON registry file. Default: ~/.config/kb-registry/registry.json. Override here, or via --config or $KB_REGISTRY_CONFIG."
+    }
   }
 }

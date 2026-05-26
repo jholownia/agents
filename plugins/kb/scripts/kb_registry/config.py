@@ -19,10 +19,35 @@ EMPTY_CONFIG = {
 
 
 def resolve_config_path(explicit=None):
-    """Resolve config path: explicit > env var > default."""
+    """Resolve config path.
+
+    Order (highest precedence first):
+      1. explicit --config flag
+      2. $KB_REGISTRY_CONFIG
+      3. $CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH (set by Claude Code from
+         the project- or user-scope pluginConfigs.kb.options block)
+      4. ~/.config/kb-registry/registry.json
+    """
     if explicit:
         return explicit
-    return os.environ.get("KB_REGISTRY_CONFIG", DEFAULT_CONFIG_PATH)
+    env = os.environ.get("KB_REGISTRY_CONFIG")
+    if env:
+        return env
+    plugin_env = os.environ.get("CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH")
+    if plugin_env:
+        return plugin_env
+    return DEFAULT_CONFIG_PATH
+
+
+def resolve_default_kb_name():
+    """Return the plugin-config-supplied default KB name, or None.
+
+    Set per-repo via pluginConfigs.kb.options.default_kb in
+    .claude/settings.json; Claude Code exports it as
+    CLAUDE_PLUGIN_OPTION_DEFAULT_KB.
+    """
+    name = os.environ.get("CLAUDE_PLUGIN_OPTION_DEFAULT_KB", "").strip()
+    return name or None
 
 
 def ensure_parent(path):

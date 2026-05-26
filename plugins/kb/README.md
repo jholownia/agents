@@ -63,11 +63,38 @@ plugins/kb/
     test_kb_registry.sh
   references/                     # shared docs (commands, kb-contract, safety)
   skills/
-    registry/ info/ remember/ stage/ recall/ dream/
+    registry/ info/ remember/ stage/ recall/ retrospective/ dream/
 ```
 
-- **Config:** `~/.config/kb-registry/registry.json` (override with `--config` or `KB_REGISTRY_CONFIG`).
+- **Config:** `~/.config/kb-registry/registry.json` (override with `--config`, `KB_REGISTRY_CONFIG`, or the project-scope plugin config below).
 - **Metrics:** `~/.local/state/kb-registry/events.jsonl` (configurable).
+
+## Per-repo defaults
+
+The CLI honours Claude Code's standard per-repo plugin config (`pluginConfigs` in `.claude/settings.json`). Two options are exposed via the plugin's `userConfig`:
+
+```json
+{
+  "enabledPlugins": {"kb@agents": true},
+  "pluginConfigs": {
+    "kb": {
+      "options": {
+        "default_kb": "emma",
+        "registry_config_path": "/Users/jh/work/registries/emma.json"
+      }
+    }
+  }
+}
+```
+
+Claude Code exports these as `CLAUDE_PLUGIN_OPTION_DEFAULT_KB` and `CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH` to the CLI's subprocess. Set them at user scope for a global default, at project scope for per-repo behaviour.
+
+Resolution order (highest precedence first):
+
+| Config | Order |
+|---|---|
+| Registry path | `--config <path>` > `KB_REGISTRY_CONFIG` > `CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH` > `~/.config/kb-registry/registry.json` |
+| Default KB (when no positional/--kb given) | explicit positional/--kb > `CLAUDE_PLUGIN_OPTION_DEFAULT_KB` > registry entry marked `"default": true` |
 
 ## v0 scope
 
@@ -84,3 +111,7 @@ These are real gaps the subagent dogfood pass surfaced; deferred to v0.1+:
 - **Dream-history queries beyond `kb open <kb> LOG.md`** — there's no CLI verb to filter LOG entries by date, kind, or supersession. `kb open` is sufficient for v0.
 - **Documents staged via `--file` cannot carry kind/title/source metadata** — by design (documents have no frontmatter), but means a longer retrospective file has to be staged via `--note "$(cat file.md)"` to get the `kind: retrospective` label.
 - **`bin/kb` PATH injection** depends on the plugin being installed via Claude Code. Local development uses `plugins/kb/bin/kb` explicitly.
+
+Resolved in v0.2 (originally listed here):
+
+- ~~Plugin-config to CLI bridge for per-repo defaults~~ — now reads `CLAUDE_PLUGIN_OPTION_*` env vars exposed by Claude Code from `pluginConfigs.kb.options` in `.claude/settings.json` (see "Per-repo defaults" above).
