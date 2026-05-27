@@ -17,8 +17,8 @@ The primary skill for "what do we know about X" questions, plus the inspection v
 1. `kb list` *(via kb:info)* — discover which KBs exist.
 2. `kb brief <kb>` *(via kb:info)* — read scope before searching.
 3. `kb pending [<kb>]` — what's unprocessed in the inbox (useful when picking up a session).
-4. `kb recall [<kb>] --query "<text>"` — search synthesised material (`notes/` + `knowledge/`).
-5. `kb recall [<kb>] --tag <tag>` — list notes carrying a tag.
+4. `kb recall [<kb>] --query "<text>"` — search synthesised material in indexable sections.
+5. `kb recall [<kb>] --tag <tag>` — list pages carrying a tag.
 6. `kb search <kb> "<query>"` — widen to include raw `inbox/`.
 7. `kb open <kb> <path>` — read a specific file once you know the path.
 8. Direct repo inspection only if the KB is insufficient.
@@ -37,7 +37,7 @@ kb search <kb> "<query>"             # wider net (includes inbox)
 kb open <kb> <relative/path>
 ```
 
-`recall` searches `notes/` and `knowledge/`, excluding the raw `inbox/`. Use `search` when you specifically need raw material. Use `pending` to see what's queued for the next dream pass.
+`recall` searches indexable sections, excluding the raw `inbox/`. Use `search` when you specifically need raw material. Use `pending` to see what's queued for the next dream pass.
 
 ### Looking at consolidation history
 

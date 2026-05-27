@@ -10,8 +10,8 @@ Every knowledge base must contain:
   BRIEF.md        # Compact summary — progressive disclosure entrypoint
   INDEX.md        # Navigational index
   LOG.md          # Maintenance and consolidation journal
-  inbox/          # Staging area for raw material (consolidated by kb-dream)
-  knowledge/      # Canonical synthesized knowledge (written by kb-dream)
+  inbox/          # Staging area for raw material
+  knowledge/      # Seed canonical section (KBs may add others)
   notes/          # Append-only single-paragraph memories with tags
   sources/        # Optional source material or pointers
   tools/          # Reserved for future diagnostics (not executed in v0)
@@ -20,9 +20,9 @@ Every knowledge base must contain:
 
 ### Lifecycle of each directory
 
-- `inbox/` — raw material. Anything here will be consumed by the next `kb-dream` pass into `knowledge/`. Includes notes (`--note`), documents (`--file`), and URL pointers (`--url`).
+- `inbox/` — raw material. By default, `kb-dream` consolidates useful material from here into an indexable canonical section. Includes notes (`--note`), documents (`--file`), and URL pointers (`--url`).
 - `notes/` — **append-only**, never consolidated. Short single-paragraph facts written by `kb remember`. `kb-dream` never touches this directory.
-- `knowledge/` — synthesised long-form pages. Written by `kb-dream` only. Agents do not edit canonical pages directly outside of a dream pass.
+- `knowledge/` — seed section for synthesised long-form pages. Agents may add other top-level canonical sections (`runbooks/`, `decisions/`, `specs/`, etc.) when the KB calls for it.
 
 ### Three-layer scoping (what goes where)
 
@@ -31,7 +31,7 @@ Every knowledge base must contain:
 | Personal user preferences ("I prefer rebase", "I like X") | Claude's auto-memory — NOT the KB |
 | Normative workflow rules ("don't push to master") | `CLAUDE.md` / `AGENTS.md` — NOT the KB |
 | Short project/domain/codebase facts ("EMMA's nightly job runs at 02:00 UTC") | KB `notes/` via `kb remember` |
-| Decisions, runbook material, longer-form facts | KB `inbox/` via `kb stage`, consolidated to `knowledge/` by `kb-dream` |
+| Decisions, runbook material, longer-form facts | KB `inbox/` via `kb stage`, consolidated by `kb-dream` into an appropriate canonical section |
 | URL pointers to read later | KB `inbox/` via `kb stage --url` |
 | Project TODOs that should survive sessions | KB `inbox/` via `kb stage --kind followup` |
 
@@ -132,9 +132,9 @@ Both shapes are stored at `inbox/YYYY/MM/YYYYMMDD-HHMMSS-<slug>.md`. The slug is
 
 ## Optional frontmatter conventions (canonical pages only)
 
-These fields apply to `knowledge/` pages, **not** inbox notes. `kb-dream` writes them when consolidating, and `rg` finds them later:
+These fields apply to canonical pages in indexable sections, **not** inbox notes. `kb-dream` writes them when consolidating, and `rg` finds them later:
 
-- `supersedes:` — list of inbox/knowledge paths this page replaces.
+- `supersedes:` — list of inbox/canonical paths this page replaces.
 - `last_reviewed:` — ISO date stamped on canonical pages so staleness is greppable.
 
 ## Validation

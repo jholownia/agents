@@ -89,7 +89,7 @@ supersedes:
 ---
 ```
 
-These are conventions, not CLI-enforced fields. `kb-dream` writes them when consolidating; future v0.1 verbs (`kb forget`, `kb supersede`) will consume them.
+These are conventions, not CLI-enforced fields. `kb-dream` writes them when consolidating; `kb forget` and any future supersession tooling may consume them.
 
 ## Open Questions lifecycle
 

@@ -1,7 +1,7 @@
 ---
 name: dream
 description: >
-  Consolidate a KB's inbox into canonical knowledge/ pages. Dry-run-
+  Consolidate a KB's inbox into canonical pages. Dry-run-
   first: produces a plan before any apply. Triggers: "consolidate <kb>",
   "compile the inbox for <kb>", "organise <kb>", "dream pass on <kb>".
 ---
@@ -10,7 +10,7 @@ description: >
 
 ## Purpose
 
-Consolidate staged inbox material into durable canonical knowledge.
+Consolidate staged inbox material into durable canonical pages.
 
 This is an agent judgment workflow, not a deterministic file-moving script. The
 registry supplies safe access and staging commands; the KB owns its internal
@@ -19,20 +19,20 @@ organization.
 ## When to use
 
 - The user asks to dream, consolidate, organize, compile, or maintain a KB.
-- Inbox notes have accumulated and should be turned into canonical knowledge.
-- A KB's `BRIEF.md`, `INDEX.md`, or `knowledge/` structure needs updating after staged discoveries.
+- Inbox notes have accumulated and should be turned into durable knowledge.
+- A KB's `BRIEF.md`, `INDEX.md`, or canonical structure needs updating after staged discoveries.
 
 ## Operating rules
 
 1. Read the KB's local rules first: `AGENTS.md`, `BRIEF.md`, `INDEX.md`, and `LOG.md` if present.
-2. Inspect the existing `knowledge/` structure before proposing new files.
+2. Inspect the existing canonical sections before proposing new files (`knowledge/` is only the seed default).
 3. Treat `inbox/` as source material, not as final knowledge.
 4. Preserve provenance by linking or naming consumed inbox/source files in canonical pages or `LOG.md`.
 5. Keep canonical pages concise, synthesized, and durable.
 6. Do not import transcripts, duplicate raw notes, secrets, or one-off noise.
 7. Prefer the KB's existing organization over a generic taxonomy.
 8. **Prefer updating an existing canonical page over creating a new one.** Duplication is the primary failure mode this workflow exists to prevent — search the KB before creating.
-9. **Replace, don't accrete.** When a new note contradicts an existing canonical claim, replace the old claim and append a supersession entry to `LOG.md` referencing both paths. Use `supersedes:` frontmatter on the rewritten page when the prior version lived in `knowledge/`.
+9. **Replace, don't accrete.** When a new note contradicts an existing canonical claim, replace the old claim and append a supersession entry to `LOG.md` referencing both paths. Use `supersedes:` frontmatter on the rewritten page when it helps preserve provenance.
 10. Present a dry-run plan before canonical edits unless the user explicitly asked to apply.
 
 ## Workflow
@@ -57,6 +57,8 @@ knowledge/
 inbox/
 ```
 
+Treat `knowledge/` as the seed canonical section, not a required destination. If local `AGENTS.md` has introduced `runbooks/`, `decisions/`, `specs/`, or another section, follow that convention.
+
 ### 2. Select inbox material
 
 Identify candidate inbox notes. Prefer recent unprocessed material and notes with durable kinds:
@@ -76,7 +78,7 @@ For notes with `kind: url` (frontmatter contains `url: <https://...>`):
 
 1. Fetch the URL. Prefer the `defuddle` skill for HTML articles (returns clean Markdown); fall back to WebFetch for everything else.
 2. If the fetch fails (404, paywall, dead link), record the failure in `LOG.md` and leave the pointer in the inbox; do not delete it.
-3. Synthesise the fetched content into a canonical page under `knowledge/` like any other source. Cite the URL in the page's provenance section.
+3. Synthesise the fetched content into the appropriate canonical section like any other source. Cite the URL in the page's provenance section.
 4. Once consolidated, mark the URL note processed (move to `inbox/processed/` per the default convention) and reference the resulting canonical page in `LOG.md`.
 
 Treat any agent-supplied description body on a URL pointer as a hint about why the link was saved — useful for choosing the canonical page's framing.
@@ -107,7 +109,7 @@ Stop here unless the user asked to apply directly.
 
 When approved, edit the KB directly:
 
-- write synthesized pages under `knowledge/`
+- write synthesized pages into the appropriate canonical section (`knowledge/` by default, or another section when the KB convention calls for it)
 - update `INDEX.md` by hand when navigation changes (semantic groupings are a curation task, not a generation task)
 - run `kb reindex <kb> --dry-run` after the writing cluster to check the generated manifest before committing canonical changes; rebuild with plain `kb reindex <kb>` once the content changes are settled
 - update `BRIEF.md` only when scope/key areas changed
