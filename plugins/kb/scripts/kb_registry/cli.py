@@ -658,6 +658,164 @@ def _entry_to_result(entry, kb_name, source):
     }
 
 
+def _log_append(kb_path, line):
+    """Append a single bullet line to LOG.md, ensuring trailing newline."""
+    log_path = os.path.join(kb_path, "LOG.md")
+    existing = ""
+    if os.path.isfile(log_path):
+        with open(log_path, "r", errors="replace") as f:
+            existing = f.read()
+    sep = "" if existing.endswith("\n") or not existing else "\n"
+    with open(log_path, "a") as f:
+        f.write(sep + line + "\n")
+
+
+def _index_md_links_path(kb_path, rel_path):
+    """True if INDEX.md contains a Markdown link pointing at rel_path."""
+    p = os.path.join(kb_path, "INDEX.md")
+    if not os.path.isfile(p):
+        return False
+    try:
+        with open(p, "r", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return False
+    # Look for `](<rel_path>` (matches both `(./rel)` after normalisation).
+    needle_plain = f"]({rel_path}"
+    needle_dot = f"](./{rel_path}"
+    return needle_plain in text or needle_dot in text
+
+
+FORGET_ALLOWED_ROOTS = ("knowledge/", "notes/")
+FORGET_PROTECTED_FILES = {
+    "BRIEF.md", "AGENTS.md", "INDEX.md", "LOG.md", "index.json", "README.md",
+    ".gitignore",
+}
+
+
+def cmd_forget(args, config, config_path):
+    """Remove a single page from `knowledge/` or `notes/`.
+
+    Git remembers the deletion, so this is a soft forget for retrieval but a
+    hard remove for the agent's working surface. Appends a one-line LOG.md
+    entry capturing date + optional reason. Index.json is not auto-rebuilt
+    (run `kb reindex`).
+    """
+    kb, err = _resolve_kb(config, args.kb)
+    if err:
+        print(f"Error: {err}", file=sys.stderr)
+        return EXIT_ARGS
+
+    kb_path = kb["path"]
+    if not os.path.isdir(kb_path):
+        print(f"Error: KB path does not exist: {kb_path}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    raw_target = args.path
+    if not raw_target:
+        print("Error: <path> is required.", file=sys.stderr)
+        return EXIT_ARGS
+
+    # Normalise to a relative POSIX path; reject absolute and traversal.
+    # Note: a literal "./" prefix is stripped, but ".." segments are
+    # preserved so check_path_traversal catches them.
+    rel = raw_target.replace(os.sep, "/")
+    if rel.startswith("./"):
+        rel = rel[2:]
+    if check_path_traversal(kb_path, rel):
+        print(f"Error: path escapes KB root: {raw_target}", file=sys.stderr)
+        return EXIT_SAFETY
+
+    # Scope: only knowledge/ + notes/. inbox/ and sources/ are out of scope
+    # (use git rm or stage processed/ for inbox).
+    if not any(rel.startswith(root) for root in FORGET_ALLOWED_ROOTS):
+        allowed = " or ".join(r.rstrip("/") for r in FORGET_ALLOWED_ROOTS)
+        print(f"Error: kb forget only operates under {allowed}/. "
+              f"Got: {rel}", file=sys.stderr)
+        return EXIT_ARGS
+
+    # Defense against forgetting contract files even if they somehow ended up
+    # nested (they shouldn't).
+    if os.path.basename(rel) in FORGET_PROTECTED_FILES:
+        print(f"Error: refusing to forget protected file: {rel}",
+              file=sys.stderr)
+        return EXIT_SAFETY
+
+    abs_target = os.path.join(kb_path, rel)
+    if not os.path.isfile(abs_target):
+        print(f"Error: file not found: {rel}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    reason = " ".join((args.reason or "").split()) or "(no reason given)"
+    today = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
+    log_line = f"- {today}: forgot `{rel}` — {reason}"
+    indexed_warn = _index_md_links_path(kb_path, rel)
+
+    if args.dry_run:
+        if args.json:
+            _output({
+                "kb": kb["name"],
+                "dry_run": True,
+                "path": rel,
+                "reason": reason,
+                "log_line": log_line,
+                "index_md_references": indexed_warn,
+            }, True)
+        else:
+            print(f"Would forget {rel}")
+            print(f"  LOG.md entry: {log_line}")
+            if indexed_warn:
+                print(f"  Warning: INDEX.md still references {rel} — edit by hand.")
+            print("  index.json will be stale until `kb reindex`.")
+        return EXIT_OK
+
+    with track_command(_metrics_path(config), "forget",
+                       kb=kb["name"]) as ctx:
+        ctx["path"] = rel
+        ctx["reason"] = reason
+        ctx["index_md_references"] = indexed_warn
+
+        try:
+            os.remove(abs_target)
+        except OSError as exc:
+            print(f"Error: could not remove {rel}: {exc}", file=sys.stderr)
+            ctx["success"] = False
+            return EXIT_FAILURE
+
+        _log_append(kb_path, log_line)
+
+        committed = False
+        if not args.no_commit and git_is_repo(kb_path):
+            # `git add` stages deletions in modern git, so this picks up both
+            # the LOG.md modification and the removed file.
+            git_add_files(kb_path, ["LOG.md", rel])
+            ok, out, rc = git_commit_files(
+                kb_path, f"kb: forget {rel}", ["LOG.md", rel]
+            )
+            committed = ok
+            if not ok and "nothing to commit" not in out:
+                print(f"Warning: commit failed: {out}", file=sys.stderr)
+
+        if args.json:
+            _output({
+                "kb": kb["name"],
+                "path": rel,
+                "reason": reason,
+                "log_line": log_line,
+                "index_md_references": indexed_warn,
+                "committed": committed,
+            }, True)
+        else:
+            print(f"Forgot {rel}")
+            if indexed_warn:
+                print(f"  Warning: INDEX.md still references {rel} — edit by hand.",
+                      file=sys.stderr)
+            print("  Tip: `kb reindex` to refresh index.json.",
+                  file=sys.stderr)
+
+    return EXIT_OK
+
+
 def cmd_recall(args, config, config_path):
     """Search synthesised material — notes/ and knowledge/, excluding inbox/.
 
@@ -1609,6 +1767,19 @@ def build_parser():
                    help="Show what would change without writing.")
     p.add_argument("--no-commit", action="store_true")
 
+    # forget
+    p = sub.add_parser(
+        "forget",
+        help="Remove a single page under knowledge/ or notes/.",
+        parents=[shared],
+    )
+    p.add_argument("kb", nargs="?")
+    p.add_argument("path")
+    p.add_argument("--reason", help="Short reason recorded in LOG.md.")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Show what would happen without removing anything.")
+    p.add_argument("--no-commit", action="store_true")
+
     # sync
     p = sub.add_parser("sync", help="Synchronize KB git repos.",
                        parents=[shared])
@@ -1660,6 +1831,7 @@ def main():
         "search": cmd_search,
         "stage": cmd_stage,
         "reindex": cmd_reindex,
+        "forget": cmd_forget,
         "sync": cmd_sync,
     }
 

@@ -607,6 +607,92 @@ rm -f "$TEST_KB/knowledge/widgets.md"
 $KB --config "$CONFIG" reindex test --no-commit >/dev/null 2>&1 || true
 
 echo ""
+echo "--- 12c. Forget ---"
+# Seed a forgettable knowledge page + a notes file via remember.
+cat > "$TEST_KB/knowledge/scratch.md" <<'MD'
+# Scratch
+
+Throwaway content for forget tests.
+MD
+NOTE_PATH=$($KB --config "$CONFIG" remember "Temporary fact about scratch." --kb test --tags scratch --no-commit --json 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)['path'])")
+git -C "$TEST_KB" add -A >/dev/null 2>&1
+git -C "$TEST_KB" commit -m "test: seed forget fixtures" >/dev/null 2>&1 || true
+# Refuse paths outside knowledge/ or notes/.
+run_fail 2 "forget refuses inbox/" $KB --config "$CONFIG" forget test inbox/something.md
+run_fail 3 "forget refuses BRIEF.md via traversal" $KB --config "$CONFIG" forget test knowledge/../BRIEF.md
+run_fail 3 "forget refuses path traversal" $KB --config "$CONFIG" forget test ../etc/passwd
+run_fail 1 "forget refuses nonexistent file" $KB --config "$CONFIG" forget test knowledge/does-not-exist.md
+# Dry-run reports plan, leaves file alone.
+OUT=$($KB --config "$CONFIG" forget test knowledge/scratch.md --dry-run --reason "duplicate of widgets" --json 2>&1)
+if echo "$OUT" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d.get('dry_run') is True, d
+assert d.get('path') == 'knowledge/scratch.md', d
+assert 'duplicate of widgets' in d.get('log_line', ''), d
+" && test -f "$TEST_KB/knowledge/scratch.md"; then
+    PASS=$((PASS+1))
+    echo "  PASS  forget --dry-run reports plan without removing"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  forget dry-run touched file or misreported (got: $OUT)"
+fi
+# Apply: deletes file, appends LOG.md, commits.
+run "forget removes knowledge page" $KB --config "$CONFIG" forget test knowledge/scratch.md --reason "obsolete"
+run "forget actually removed file" bash -c "! test -f '$TEST_KB/knowledge/scratch.md'"
+if grep -q "forgot \`knowledge/scratch.md\`" "$TEST_KB/LOG.md"; then
+    PASS=$((PASS+1))
+    echo "  PASS  LOG.md captured the forget entry"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  LOG.md missing forget entry"
+fi
+# Commit landed.
+if git -C "$TEST_KB" log -1 --format=%s | grep -q "kb: forget knowledge/scratch.md"; then
+    PASS=$((PASS+1))
+    echo "  PASS  forget commit message is correct"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  forget did not commit (or wrong subject)"
+fi
+# Git history still has the content (forget = soft for retrieval, hard for surface).
+if git -C "$TEST_KB" log --all -- knowledge/scratch.md | grep -q "test: seed forget fixtures"; then
+    PASS=$((PASS+1))
+    echo "  PASS  git history preserves forgotten content"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  git history lost the forgotten content"
+fi
+# Forget a notes/ entry too.
+if [ -n "$NOTE_PATH" ] && [ -f "$TEST_KB/$NOTE_PATH" ]; then
+    run "forget notes/ entry" $KB --config "$CONFIG" forget test "$NOTE_PATH"
+    run "notes file removed" bash -c "! test -f '$TEST_KB/$NOTE_PATH'"
+fi
+# Forget warns when INDEX.md links the path.
+cat > "$TEST_KB/knowledge/linked.md" <<'MD'
+# Linked Page
+Content.
+MD
+python3 - "$TEST_KB/INDEX.md" <<'PY'
+import sys
+p = sys.argv[1]
+with open(p) as f: t = f.read()
+with open(p, "w") as f: f.write(t + "\n- [Linked](knowledge/linked.md)\n")
+PY
+git -C "$TEST_KB" add -A >/dev/null 2>&1
+git -C "$TEST_KB" commit -m "test: add linked fixture" >/dev/null 2>&1 || true
+WARN_OUT=$($KB --config "$CONFIG" forget test knowledge/linked.md 2>&1)
+if echo "$WARN_OUT" | grep -q "INDEX.md still references"; then
+    PASS=$((PASS+1))
+    echo "  PASS  forget warns about INDEX.md reference"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  no INDEX.md-reference warning (got: $WARN_OUT)"
+fi
+# No tidy: the temp KB is wiped by the EXIT trap. Skipped to avoid
+# destructive git ops if someone overrides KB_REGISTRY_TEST_KB.
+
+echo ""
 echo "--- 13. Metrics ---"
 EVENTS=$(wc -l < "$METRICS" 2>/dev/null || echo 0)
 if [ "$EVENTS" -gt 0 ]; then

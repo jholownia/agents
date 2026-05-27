@@ -269,6 +269,34 @@ kb reindex --json
 
 Refresh is explicit: `kb remember`, `kb stage`, and `kb-dream` do not auto-rebuild. Run `kb reindex --dry-run` during a writing cluster, then rebuild the generated index after the content changes are settled.
 
+## forget
+
+Remove a single page under `knowledge/` or `notes/`.
+
+```bash
+kb forget [<kb>] <path>
+kb forget [<kb>] <path> --reason "<text>"
+kb forget [<kb>] <path> --dry-run
+kb forget [<kb>] <path> --no-commit
+kb forget --json [<kb>] <path>
+```
+
+- `<path>` must be relative to the KB root and live under `knowledge/` or `notes/`. Inbox material is out of scope (use `git rm` or move into `inbox/processed/`).
+- Refuses contract files (`BRIEF.md`, `AGENTS.md`, `INDEX.md`, `LOG.md`, `index.json`, `README.md`, `.gitignore`) and any path that escapes the KB root.
+- Removes the file, appends a one-line entry to `LOG.md` in the form `- YYYY-MM-DD: forgot PATH — REASON`, and auto-commits `kb: forget PATH` covering both the deletion and the log update. `--no-commit` leaves the changes uncommitted.
+- Falls back to the default KB when `<kb>` is omitted.
+
+### Soft for retrieval, hard for surface
+
+Forget removes the file from the agent's working surface — `kb recall`, `kb search`, `kb open`, `index.json` after the next reindex — but git history preserves the content. `git log --all -- <path>` recovers what was forgotten and when. This is the v0 stand-in for `kb supersede`: replacement is implicit via git history.
+
+### What forget does NOT do
+
+- **Auto-rebuild `index.json`.** Run `kb reindex <kb>` afterwards. (Stale-index tip is printed.)
+- **Auto-edit `INDEX.md`.** If the forgotten path is referenced from the agent-curated `INDEX.md`, forget warns and leaves the link in place — edit by hand. The check is a literal `](knowledge/<path>` / `](notes/<path>` substring scan.
+
+Exit codes follow the global table at the top of this file: `1` on filesystem/commit failure or missing file, `2` on bad arguments (e.g. path outside `knowledge/` or `notes/`), `3` on safety rejection (traversal, protected file).
+
 ## sync
 
 Synchronize KB git repos with their remotes.
