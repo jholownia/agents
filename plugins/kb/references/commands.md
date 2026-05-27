@@ -199,11 +199,12 @@ kb search <kb> "<query>" --exclude-inbox
 
 ## stage
 
-Stage one of three shapes into a KB inbox:
+Stage one of four shapes into a KB inbox:
 
 - **Note** — agent-written observation, semi-structured (YAML frontmatter + body).
 - **Document** — any text file, copied verbatim, no frontmatter.
 - **URL pointer** — a link to be fetched and summarised later by `kb-dream`.
+- **Directory** — bulk-stage every text file under a source tree as documents.
 
 ```bash
 kb stage <kb> --note "<text>"                              # note
@@ -211,9 +212,10 @@ kb stage <kb> --kind decision --note "<text>" --title T    # note with kind+titl
 kb stage <kb> --file <path>                                # document
 kb stage <kb> --url <https://...>                          # URL pointer
 kb stage <kb> --url <https://...> --note "<description>"   # URL + description
+kb stage <kb> --dir <path>                                 # bulk: every text file under <path>
 ```
 
-Mode is determined by which flag is set. `--file` is mutually exclusive with `--note` and `--url`. `--note` may accompany `--url` as an optional description body.
+Mode is determined by which flag is set. `--dir` is mutually exclusive with `--note`, `--file`, and `--url`. `--file` is mutually exclusive with `--note` and `--url`. `--note` may accompany `--url` as an optional description body.
 
 ### Notes (`--note`)
 
@@ -221,6 +223,16 @@ Mode is determined by which flag is set. `--file` is mutually exclusive with `--
 - Written with YAML frontmatter (`created_at`, `kind`, optional `source`, optional `title`).
 - Notes own their own headings — the CLI does not prepend one.
 - `--kind` accepts any string and is written verbatim to frontmatter. Suggested starting points: `decision`, `domain-fact`, `codebase-fact`, `runbook-note`, `retrospective`, `followup`, `raw-note` (default when `--kind` is omitted). Invent KB-specific kinds (`hypothesis`, `open-question`, `benchmark`, ...) freely.
+
+### Directory (`--dir`)
+
+- Walks a source tree recursively and bulk-stages every recognised text file as a document.
+- Recognised extensions: `.md`, `.markdown`, `.txt`, `.org`, `.rst`. Anything else is skipped (counted as `extension` in the summary).
+- Skips hidden files/dirs, common SCM/build dirs (`.git`, `node_modules`, `__pycache__`, `dist`, `build`, `venv`, `target`, `out`, `.tox`), binary files (null bytes in first 8 KB), empty files, and files over 1 MB (unless `--force`).
+- All files land under a single `inbox/YYYY/MM/<timestamp>-NNN-<slug>.md` prefix and are committed together: `kb: stage directory <basename> (N files)`.
+- `--kind`, `--title`, `--source`, `--note` are ignored for `--dir` (documents have no frontmatter); a warning is printed if set.
+- JSON output lists every staged relative path plus skip counts per category, so the agent can decide whether to re-run with `--force` or stage misses individually via `--file`.
+- Typical use: "set up a KB from this project's existing notes" → `kb bootstrap <name> --path ...` then `kb stage <name> --dir ~/Documents/project-foo/`, then a `kb-dream` pass to consolidate.
 
 ### Documents (`--file`)
 

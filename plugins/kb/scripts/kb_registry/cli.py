@@ -1134,14 +1134,169 @@ def cmd_search(args, config, config_path):
     return EXIT_OK
 
 
+# Text extensions recognised by `--dir` bulk staging. The single-file
+# `--file` path is permissive (any text file passes check_binary); `--dir`
+# is stricter to avoid sweeping in random .json/.lock files from a source
+# tree. Agents can fall back to --file for one-off oddities.
+DIR_TEXT_EXTENSIONS = frozenset({
+    ".md", ".markdown", ".txt", ".org", ".rst",
+})
+# Directories we always skip when walking a source tree via `--dir`. Plus
+# anything starting with a dot.
+DIR_SKIP_NAMES = frozenset({
+    "node_modules", "__pycache__", "dist", "build", "venv",
+    "target", "out", ".tox",
+})
+
+
+def _iter_dir_documents(root, force):
+    """Walk a source tree and yield (abs_path, status) for every file.
+
+    status:
+      ok        — text file ready to stage
+      binary    — has null bytes; skipped
+      large     — over 1 MB and --force not set; skipped
+      empty     — zero bytes; skipped
+      extension — unrecognised extension; skipped
+    """
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if d not in DIR_SKIP_NAMES and not d.startswith(".")
+        )
+        for fn in sorted(filenames):
+            if fn.startswith("."):
+                continue
+            abs_path = os.path.join(dirpath, fn)
+            ext = os.path.splitext(fn)[1].lower()
+            if ext not in DIR_TEXT_EXTENSIONS:
+                yield abs_path, "extension"
+                continue
+            try:
+                size = os.path.getsize(abs_path)
+            except OSError:
+                continue
+            if size == 0:
+                yield abs_path, "empty"
+                continue
+            if check_binary(abs_path):
+                yield abs_path, "binary"
+                continue
+            if check_large_file(abs_path) and not force:
+                yield abs_path, "large"
+                continue
+            yield abs_path, "ok"
+
+
+def _cmd_stage_dir(args, config, kb, kb_path):
+    """Bulk-stage every text file under args.dir as a verbatim document.
+
+    Walks recursively. Files share one inbox timestamp prefix and one
+    commit at the end. Skipped categories are reported in the summary.
+    """
+    src_root = os.path.abspath(args.dir)
+    if not os.path.isdir(src_root):
+        print(f"Error: directory not found: {src_root}", file=sys.stderr)
+        return EXIT_ARGS
+
+    if args.kind or args.title or args.source or args.note:
+        print(
+            "Note: --kind/--title/--source/--note are ignored for --dir "
+            "(documents have no frontmatter).",
+            file=sys.stderr,
+        )
+
+    with track_command(_metrics_path(config), "stage",
+                       kb=kb["name"]) as ctx:
+        ctx["mode"] = "dir"
+        ctx["source"] = src_root
+
+        now = datetime.now(timezone.utc).astimezone()
+        date_dir = now.strftime("%Y/%m")
+        timestamp_slug = now.strftime("%Y%m%d-%H%M%S")
+        inbox_dir = os.path.join("inbox", date_dir)
+
+        staged = []
+        skipped = {"binary": [], "large": [], "empty": [], "extension": []}
+        counter = 0
+        for abs_src, status in _iter_dir_documents(src_root, args.force):
+            if status != "ok":
+                skipped[status].append(os.path.relpath(abs_src, src_root))
+                continue
+            # Slug from basename; counter disambiguates collisions across
+            # subdirectories within the same second.
+            stem = os.path.splitext(os.path.basename(abs_src))[0]
+            slug = _slugify(stem) or "doc"
+            rel_path = os.path.join(
+                inbox_dir, f"{timestamp_slug}-{counter:03d}-{slug}.md",
+            )
+            counter += 1
+
+            if check_canonical_write(kb_path, rel_path):
+                print("Error: refused canonical write.", file=sys.stderr)
+                ctx["success"] = False
+                return EXIT_SAFETY
+
+            full_path = os.path.join(kb_path, rel_path)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            try:
+                with open(abs_src, "r", errors="replace") as f:
+                    content = f.read()
+            except OSError as exc:
+                print(f"Warning: could not read {abs_src}: {exc}",
+                      file=sys.stderr)
+                continue
+            if not content.endswith("\n"):
+                content += "\n"
+            with open(full_path, "w") as f:
+                f.write(content)
+            staged.append(rel_path)
+
+        ctx["staged"] = len(staged)
+        ctx["skipped_binary"] = len(skipped["binary"])
+        ctx["skipped_large"] = len(skipped["large"])
+        ctx["skipped_extension"] = len(skipped["extension"])
+        ctx["skipped_empty"] = len(skipped["empty"])
+
+        committed = False
+        if staged and not args.no_commit and git_is_repo(kb_path):
+            git_add_files(kb_path, staged)
+            commit_msg = (
+                f"kb: stage directory {os.path.basename(src_root) or src_root}"
+                f" ({len(staged)} files)"
+            )
+            ok, out, rc = git_commit_files(kb_path, commit_msg, staged)
+            committed = ok
+            if not ok and "nothing to commit" not in out:
+                print(f"Warning: commit failed: {out}", file=sys.stderr)
+
+        if args.json:
+            _output({
+                "kb": kb["name"],
+                "mode": "dir",
+                "source": src_root,
+                "staged": staged,
+                "skipped": {k: v for k, v in skipped.items() if v},
+                "committed": committed,
+            }, True)
+        else:
+            print(f"Staged {len(staged)} file(s) from {src_root}")
+            for kind, paths in skipped.items():
+                if paths:
+                    print(f"  Skipped {len(paths)} ({kind})", file=sys.stderr)
+
+    return EXIT_OK
+
+
 def cmd_stage(args, config, config_path):
     """Stage one of:
-      - a note   (agent-written text, frontmatter + body) via --note
+      - a note     (agent-written text, frontmatter + body) via --note
       - a document (any text file, copied verbatim, no frontmatter) via --file
       - a URL pointer (fetched/summarised later by kb-dream) via --url
+      - a directory of text files (bulk-staged as documents) via --dir
 
-    --note may accompany --url to provide a description; otherwise --file,
-    --note, and --url are mutually exclusive primary inputs.
+    --note may accompany --url to provide a description; otherwise --note,
+    --file, --url, and --dir are mutually exclusive primary inputs.
     """
     kb, err = _resolve_kb(config, args.kb)
     if err:
@@ -1156,15 +1311,25 @@ def cmd_stage(args, config, config_path):
     is_file = bool(args.file)
     is_url = bool(args.url)
     is_note_text = bool(args.note)
+    is_dir = bool(getattr(args, "dir", None))
 
+    if is_dir and (is_file or is_url or is_note_text):
+        print("Error: --dir is mutually exclusive with --note, --file, --url.",
+              file=sys.stderr)
+        return EXIT_ARGS
     if is_file and (is_note_text or is_url):
         print("Error: --file is mutually exclusive with --note and --url.",
               file=sys.stderr)
         return EXIT_ARGS
-    if not (is_file or is_url or is_note_text):
-        print("Error: one of --note, --file, --url is required.",
+    if not (is_file or is_url or is_note_text or is_dir):
+        print("Error: one of --note, --file, --url, --dir is required.",
               file=sys.stderr)
         return EXIT_ARGS
+
+    # --dir branches early: bulk-stage every text file under the source tree
+    # as a verbatim document, one git commit at the end.
+    if is_dir:
+        return _cmd_stage_dir(args, config, kb, kb_path)
 
     if is_url and not re.match(r"^https?://", args.url):
         print("Error: --url must start with http:// or https://.",
@@ -1798,6 +1963,14 @@ def build_parser():
     p.add_argument("--note", help="Note body, or description when paired with --url.")
     p.add_argument("--file", help="Path to a text file; staged verbatim.")
     p.add_argument("--url", help="URL pointer; kb-dream fetches/summarises later.")
+    p.add_argument(
+        "--dir",
+        help=(
+            "Path to a directory of text files; bulk-stages every "
+            ".md/.txt/.org/.rst recursively, one commit at the end. "
+            "Skips binaries, oversized files, hidden/SCM dirs."
+        ),
+    )
     p.add_argument(
         "--kind", default=None,
         help=(

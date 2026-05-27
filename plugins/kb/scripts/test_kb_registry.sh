@@ -134,6 +134,80 @@ git -C "$TEST_KB" reset -- pre_staged.txt >/dev/null 2>&1 || true
 rm -f "$TEST_KB/pre_staged.txt"
 
 echo ""
+echo "--- 5a. Stage --dir (bulk) ---"
+DIR_SRC="$TMPDIR/source-tree"
+mkdir -p "$DIR_SRC/sub/nested" "$DIR_SRC/node_modules/pkg" "$DIR_SRC/.git"
+cat > "$DIR_SRC/intro.md" <<'MD'
+# Intro
+Top-level markdown source.
+MD
+cat > "$DIR_SRC/notes.txt" <<'TXT'
+Plain text notes.
+TXT
+cat > "$DIR_SRC/sub/nested/deep.md" <<'MD'
+# Deep
+Recursively-found source.
+MD
+# Sources we should NOT pick up:
+echo '{"junk":true}' > "$DIR_SRC/config.json"          # wrong extension
+python3 -c "open('$DIR_SRC/blob.md', 'wb').write(b'\x00binary\x00')"  # null bytes
+: > "$DIR_SRC/empty.md"                                 # empty (0 bytes)
+echo "scm" > "$DIR_SRC/.git/HEAD"                       # hidden dir
+echo "x" > "$DIR_SRC/node_modules/pkg/index.md"         # bloat dir
+echo "# hidden" > "$DIR_SRC/.hidden.md"                 # hidden file
+# Bulk stage and assert exactly the 3 expected files landed.
+OUT=$($KB --config "$CONFIG" stage test --dir "$DIR_SRC" --json 2>&1)
+STAGED_COUNT=$(echo "$OUT" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+print(len(d['staged']))
+" 2>/dev/null)
+if [ "$STAGED_COUNT" = "3" ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  stage --dir staged exactly 3 text files"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected 3 staged, got $STAGED_COUNT (out: $OUT)"
+fi
+# Skip categories surface in JSON.
+if echo "$OUT" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+skipped = d.get('skipped', {})
+assert 'binary' in skipped, skipped
+assert 'extension' in skipped, skipped
+assert 'empty' in skipped, skipped
+"; then
+    PASS=$((PASS+1))
+    echo "  PASS  stage --dir reports skip categories"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  stage --dir skip categories missing"
+fi
+# All staged files committed in a single bulk commit.
+BULK_SUBJECT=$(git -C "$TEST_KB" log -1 --pretty=%s)
+if echo "$BULK_SUBJECT" | grep -qE "kb: stage directory .* \(3 files\)"; then
+    PASS=$((PASS+1))
+    echo "  PASS  --dir commit subject reports count"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  unexpected commit subject: $BULK_SUBJECT"
+fi
+# Files copied verbatim (no frontmatter prepended).
+NEW_DOC=$(find "$TEST_KB/inbox" -name '*-intro.md' | head -1)
+if [ -n "$NEW_DOC" ] && head -1 "$NEW_DOC" | grep -q '^# Intro$'; then
+    PASS=$((PASS+1))
+    echo "  PASS  --dir copies content verbatim (no frontmatter)"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  --dir content not verbatim (file=$NEW_DOC)"
+fi
+# Mutex: --dir + --note must error.
+run_fail 2 "--dir + --note rejected" $KB --config "$CONFIG" stage test --dir "$DIR_SRC" --note "x"
+# Missing dir.
+run_fail 2 "--dir nonexistent path rejected" $KB --config "$CONFIG" stage test --dir "$TMPDIR/does-not-exist"
+
+echo ""
 echo "--- 6. Safety ---"
 # v0 no longer scans content for secrets — credentials-discussing docs must stage cleanly.
 run "credential-discussing doc stages cleanly" $KB --config "$CONFIG" stage test --note "examples include password=hunter2 and AKIA1234567890ABCDEF"
