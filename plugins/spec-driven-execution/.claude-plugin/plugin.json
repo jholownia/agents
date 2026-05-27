@@ -1,0 +1,8 @@
+{
+  "name": "spec-driven-execution",
+  "description": "Spec-driven execution model for non-trivial tasks that benefit from durable, explicit planning, design, and validation steps. Each change is captured in a self-contained folder with a mini-spec (description + validation + tasks) written before any code; archived folders double as the decision record.",
+  "version": "0.1.0",
+  "author": {
+    "name": "jholownia"
+  }
+}
