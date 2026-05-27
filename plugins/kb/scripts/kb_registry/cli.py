@@ -616,12 +616,54 @@ def cmd_remember(args, config, config_path):
     return EXIT_OK
 
 
+def _load_index_json(kb_path):
+    """Return the parsed `index.json` list for a KB, or None if missing /
+    malformed."""
+    p = os.path.join(kb_path, INDEX_FILENAME)
+    if not os.path.isfile(p):
+        return None
+    try:
+        with open(p, "r", errors="replace") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, list) else None
+
+
+def _score_index_entry(entry, query_lc):
+    """Higher score = stronger match. Title hits dominate tags and summaries."""
+    score = 0
+    title = (entry.get("title") or "").lower()
+    summary = (entry.get("summary") or "").lower()
+    tags = [str(t).lower() for t in entry.get("tags") or []]
+    if query_lc in title:
+        score += 3
+    if any(query_lc == t for t in tags):
+        score += 2
+    elif any(query_lc in t for t in tags):
+        score += 1
+    if query_lc in summary:
+        score += 1
+    return score
+
+
+def _entry_to_result(entry, kb_name, source):
+    return {
+        "kb": kb_name,
+        "path": entry.get("path", ""),
+        "title": entry.get("title", ""),
+        "tags": entry.get("tags", []) or [],
+        "snippet": entry.get("summary", "") or "",
+        "source": source,  # "index" or "body"
+    }
+
+
 def cmd_recall(args, config, config_path):
     """Search synthesised material — notes/ and knowledge/, excluding inbox/.
 
-    Distinct from `kb search`, which searches the whole KB (incl. inbox).
-    Use recall for 'what do we know about X' style questions; the
-    inbox is raw material, not knowledge.
+    Prefers `index.json` (built by `kb reindex`) for fast title/tag/summary
+    matches, then merges body-grep hits underneath. Falls back to body grep
+    alone when `index.json` is absent — with a nudge to run `kb reindex`.
     """
     if args.kb:
         kb, err = _resolve_kb(config, args.kb)
@@ -637,15 +679,33 @@ def cmd_recall(args, config, config_path):
 
     max_results = args.max_results or DEFAULT_SEARCH_MAX
 
+    if not args.query and not args.tag:
+        print("Error: provide --query or --tag.", file=sys.stderr)
+        return EXIT_ARGS
+
     all_results = []
+    missing_index_kbs = []
     for kb in targets:
         kb_path = kb["path"]
         if not os.path.isdir(kb_path):
             continue
-        # Tag-only filtering: walk notes/ and pick files whose
-        # frontmatter tags include args.tag.
+
+        index = _load_index_json(kb_path)
+        if index is None:
+            missing_index_kbs.append(kb["name"])
+
+        # --- Tag path: index.json is authoritative when present. ---
         if args.tag and not args.query:
             tag = args.tag.strip()
+            if index is not None:
+                for entry in index:
+                    tags = [str(t) for t in entry.get("tags") or []]
+                    if tag in tags:
+                        all_results.append(
+                            _entry_to_result(entry, kb["name"], "index")
+                        )
+                continue
+            # Fallback: walk notes/ frontmatter directly.
             notes_root = os.path.join(kb_path, "notes")
             if not os.path.isdir(notes_root):
                 continue
@@ -658,8 +718,6 @@ def cmd_recall(args, config, config_path):
                     raw_tags = meta.get("tags", "")
                     if not raw_tags:
                         continue
-                    # Frontmatter parser returned a single string for the
-                    # `tags: [..]` line. Strip brackets/quotes.
                     cleaned = raw_tags.strip().lstrip("[").rstrip("]")
                     file_tags = [
                         t.strip().strip('"').strip("'")
@@ -667,44 +725,55 @@ def cmd_recall(args, config, config_path):
                     ]
                     if tag in file_tags:
                         rel_path = os.path.relpath(full, kb_path)
-                        snippet = _first_body_line(full)
                         all_results.append({
                             "kb": kb["name"],
                             "path": rel_path,
                             "title": _extract_title(full),
                             "tags": file_tags,
-                            "snippet": snippet,
+                            "snippet": _first_body_line(full),
+                            "source": "fallback",
                         })
             continue
 
-        # Query-driven path: lexical search restricted to notes/ + knowledge/.
-        if not args.query:
-            print("Error: provide --query or --tag.", file=sys.stderr)
-            return EXIT_ARGS
+        # --- Query path: rank index hits, then merge body-grep hits. ---
+        query = args.query
+        query_lc = query.lower()
+        seen_paths = set()
 
-        # search_kb already excludes .git and (optionally) inbox.
-        # We need to additionally exclude sources/ and tools/.
-        # search.py exposes exclude_inbox; for now build two scoped
-        # searches and merge.
-        sub_results = []
+        if index is not None:
+            scored = []
+            for entry in index:
+                s = _score_index_entry(entry, query_lc)
+                if s > 0:
+                    scored.append((s, entry))
+            scored.sort(key=lambda x: (-x[0], x[1].get("path", "")))
+            for _, entry in scored:
+                result = _entry_to_result(entry, kb["name"], "index")
+                all_results.append(result)
+                seen_paths.add(result["path"])
+
+        # Body grep across notes/ + knowledge/. Skip paths already surfaced
+        # by the index so we don't duplicate rows.
         for sub_dir in ("notes", "knowledge"):
             scoped_root = os.path.join(kb_path, sub_dir)
             if not os.path.isdir(scoped_root):
                 continue
             sub = search_kb(
-                scoped_root, args.query,
+                scoped_root, query,
                 max_results=max_results,
                 glob_pattern=None,
-                exclude_inbox=False,  # nothing called inbox below here
+                exclude_inbox=False,
             )
             for r in sub:
-                # Re-anchor path to kb root.
                 r["path"] = os.path.join(sub_dir, r["path"])
+                if r["path"] in seen_paths:
+                    continue
                 r["kb"] = kb["name"]
-                sub_results.append(r)
-        all_results.extend(sub_results)
+                r["source"] = "body"
+                all_results.append(r)
+                seen_paths.add(r["path"])
+
         if len(all_results) >= max_results:
-            all_results = all_results[:max_results]
             break
 
     all_results = all_results[:max_results]
@@ -714,6 +783,7 @@ def cmd_recall(args, config, config_path):
         ctx["query"] = args.query
         ctx["tag"] = args.tag
         ctx["result_count"] = len(all_results)
+        ctx["missing_index"] = bool(missing_index_kbs)
 
         if args.json:
             _output(all_results, True)
@@ -721,16 +791,28 @@ def cmd_recall(args, config, config_path):
 
         if not all_results:
             print("No results.")
+            if missing_index_kbs:
+                print(
+                    f"Tip: `kb reindex {missing_index_kbs[0]}` to enable "
+                    f"index-aware matches.", file=sys.stderr,
+                )
             return EXIT_OK
 
         for r in all_results:
             kb_name = r.get("kb", "?")
             tags = r.get("tags")
             tags_str = f" [{', '.join(tags)}]" if tags else ""
-            snippet = r.get("snippet", "")[:80]
+            snippet = (r.get("snippet") or "")[:80]
             line = r.get("line")
             loc = f"{r['path']}" + (f":{line}" if line else "")
-            print(f"  [{kb_name}] {loc}{tags_str}  {snippet}")
+            marker = "*" if r.get("source") == "index" else " "
+            print(f" {marker}[{kb_name}] {loc}{tags_str}  {snippet}")
+
+        if missing_index_kbs:
+            print(
+                f"Tip: `kb reindex {missing_index_kbs[0]}` to enable "
+                f"index-aware matches.", file=sys.stderr,
+            )
 
     return EXIT_OK
 
@@ -1050,6 +1132,265 @@ def cmd_stage(args, config, config_path):
     return EXIT_OK
 
 
+INDEX_FILENAME = "index.json"
+INDEX_SECTIONS = ("knowledge", "notes")
+_INDEX_SUMMARY_MAX = 200
+
+
+def _strip_frontmatter(content):
+    """Return (frontmatter_dict, body) for a file's text content."""
+    fm = {}
+    body = content
+    if content.startswith("---"):
+        end = content.find("\n---", 3)
+        if end != -1:
+            block = content[3:end]
+            body = content[end + len("\n---"):]
+            if body.startswith("\n"):
+                body = body[1:]
+            for raw in block.splitlines():
+                if ":" not in raw:
+                    continue
+                k, _, v = raw.partition(":")
+                k = k.strip()
+                v = v.strip()
+                if v.startswith("[") and v.endswith("]"):
+                    v = [t.strip().strip('"').strip("'")
+                         for t in v[1:-1].split(",") if t.strip()]
+                else:
+                    if v.startswith('"') and v.endswith('"'):
+                        v = v[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+                    elif v.startswith("'") and v.endswith("'"):
+                        v = v[1:-1]
+                if v in ("", "null"):
+                    continue
+                fm[k] = v
+    return fm, body
+
+
+def _summary_from_body(body, max_chars=_INDEX_SUMMARY_MAX):
+    """Return the first body paragraph (after any H1), capped."""
+    found_h1 = False
+    paragraph = []
+    for raw in body.splitlines():
+        stripped = raw.strip()
+        if stripped.startswith("# ") and not found_h1:
+            found_h1 = True
+            continue
+        if not paragraph:
+            if not stripped:
+                continue
+            if stripped.startswith(("##", "```", "---", "|", ">", "- ", "* ")):
+                if found_h1:
+                    # Treat structural lines as the start of "non-prose";
+                    # skip until we either find prose or give up.
+                    continue
+                continue
+            paragraph.append(stripped)
+            continue
+        if not stripped:
+            break
+        if stripped.startswith(("##", "```", "---", "|", ">")):
+            break
+        paragraph.append(stripped)
+    text = " ".join(paragraph)
+    if len(text) > max_chars:
+        text = text[:max_chars].rsplit(" ", 1)[0] + "..."
+    return text
+
+
+_WORD_STRIP_CODE = re.compile(r"```[\s\S]*?```")
+_WORD_STRIP_INLINE = re.compile(r"`[^`]+`")
+_WORD_STRIP_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+_WORD_STRIP_MD = re.compile(r"[#*|>=\-]")
+
+
+def _word_count(body):
+    """Approximate word count, stripping common markdown noise."""
+    t = _WORD_STRIP_CODE.sub("", body)
+    t = _WORD_STRIP_INLINE.sub("", t)
+    t = _WORD_STRIP_LINK.sub(r"\1", t)
+    t = _WORD_STRIP_MD.sub(" ", t)
+    return len(t.split())
+
+
+def _git_last_modified(kb_path, rel_path):
+    """Return ISO timestamp of last commit touching rel_path, or ''."""
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["git", "log", "-1", "--format=%cI", "--", rel_path],
+            capture_output=True, text=True, cwd=kb_path, check=False,
+        )
+        return (r.stdout or "").strip()
+    except Exception:
+        return ""
+
+
+def _collect_index_files(kb_path):
+    """Yield (rel_path, section) for every .md file under indexed sections,
+    excluding README.md and dotfiles. Walks subdirectories so notes/YYYY/MM
+    layouts are included."""
+    for section in INDEX_SECTIONS:
+        root = os.path.join(kb_path, section)
+        if not os.path.isdir(root):
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+            for fn in sorted(filenames):
+                if fn == "README.md" or fn.startswith("."):
+                    continue
+                if not fn.endswith(".md"):
+                    continue
+                abs_path = os.path.join(dirpath, fn)
+                rel = os.path.relpath(abs_path, kb_path).replace(os.sep, "/")
+                yield rel, section
+
+
+def _build_index_entry(kb_path, rel, section):
+    abs_path = os.path.join(kb_path, rel)
+    try:
+        with open(abs_path, "r", errors="replace") as f:
+            content = f.read()
+    except OSError:
+        return None
+    fm, body = _strip_frontmatter(content)
+    title = _extract_title(abs_path)
+    summary = _summary_from_body(body)
+    tags = fm.get("tags", [])
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",") if t.strip()]
+    if not isinstance(tags, list):
+        tags = []
+    entry = {
+        "path": rel,
+        "title": title,
+        "section": section,
+        "tags": tags,
+        "summary": summary,
+        "word_count": _word_count(body),
+        "last_modified": _git_last_modified(kb_path, rel),
+    }
+    kind = fm.get("kind")
+    if isinstance(kind, str) and kind:
+        entry["kind"] = kind
+    return entry
+
+
+def _build_index(kb_path):
+    entries = []
+    for rel, section in _collect_index_files(kb_path):
+        e = _build_index_entry(kb_path, rel, section)
+        if e is not None:
+            entries.append(e)
+    entries.sort(key=lambda x: x["path"])
+    return entries
+
+
+def cmd_reindex(args, config, config_path):
+    """Build or refresh `<kb>/index.json`.
+
+    Walks `knowledge/` and `notes/` and emits a structured manifest (path,
+    title, section, tags, summary, word_count, last_modified, optional
+    kind) that `kb recall` can consult before doing body grep. The
+    agent-curated `INDEX.md` is left untouched.
+    """
+    kb, err = _resolve_kb(config, args.kb)
+    if err:
+        print(f"Error: {err}", file=sys.stderr)
+        return EXIT_ARGS
+
+    kb_path = kb["path"]
+    if not os.path.isdir(kb_path):
+        print(f"Error: KB path does not exist: {kb_path}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    index_path = os.path.join(kb_path, INDEX_FILENAME)
+
+    with track_command(_metrics_path(config), "reindex",
+                       kb=kb["name"]) as ctx:
+        entries = _build_index(kb_path)
+        new_payload = json.dumps(entries, indent=2, ensure_ascii=False) + "\n"
+
+        old_payload = ""
+        old_count = 0
+        if os.path.isfile(index_path):
+            try:
+                with open(index_path, "r", errors="replace") as f:
+                    old_payload = f.read()
+                try:
+                    old_entries = json.loads(old_payload)
+                    if isinstance(old_entries, list):
+                        old_count = len(old_entries)
+                except json.JSONDecodeError:
+                    old_count = -1  # malformed; treat as a rebuild target
+            except OSError:
+                pass
+
+        changed = new_payload != old_payload
+        ctx["entries"] = len(entries)
+        ctx["changed"] = changed
+        ctx["dry_run"] = bool(args.dry_run)
+
+        if args.dry_run:
+            if args.json:
+                _output({
+                    "kb": kb["name"],
+                    "dry_run": True,
+                    "changed": changed,
+                    "entries": len(entries),
+                    "previous_entries": old_count,
+                    "path": INDEX_FILENAME,
+                }, True)
+            else:
+                print(f"Would write {len(entries)} entries to "
+                      f"{INDEX_FILENAME} (was {old_count}). "
+                      f"Changed: {changed}.")
+            return EXIT_OK
+
+        if not changed:
+            if args.json:
+                _output({
+                    "kb": kb["name"],
+                    "changed": False,
+                    "entries": len(entries),
+                    "path": INDEX_FILENAME,
+                }, True)
+            else:
+                print(f"{INDEX_FILENAME} up to date ({len(entries)} entries).")
+            return EXIT_OK
+
+        with open(index_path, "w") as f:
+            f.write(new_payload)
+
+        committed = False
+        if not args.no_commit and git_is_repo(kb_path):
+            git_add_files(kb_path, [INDEX_FILENAME])
+            ok, out, rc = git_commit_files(
+                kb_path, "kb: rebuild index.json", [INDEX_FILENAME]
+            )
+            committed = ok
+            if not ok and "nothing to commit" not in out:
+                print(f"Warning: commit failed: {out}", file=sys.stderr)
+
+        if args.json:
+            _output({
+                "kb": kb["name"],
+                "changed": True,
+                "entries": len(entries),
+                "previous_entries": old_count,
+                "path": INDEX_FILENAME,
+                "committed": committed,
+            }, True)
+        else:
+            delta = len(entries) - old_count if old_count >= 0 else len(entries)
+            sign = "+" if delta >= 0 else ""
+            print(f"Rebuilt {INDEX_FILENAME}: {len(entries)} entries "
+                  f"({sign}{delta} from previous).")
+
+    return EXIT_OK
+
+
 def cmd_sync(args, config, config_path):
     if args.all:
         targets = config.get("kbs", [])
@@ -1257,6 +1598,17 @@ def build_parser():
     p.add_argument("--no-commit", action="store_true")
     p.add_argument("--force", action="store_true")
 
+    # reindex
+    p = sub.add_parser(
+        "reindex",
+        help="Rebuild the generated index.json manifest.",
+        parents=[shared],
+    )
+    p.add_argument("kb", nargs="?")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Show what would change without writing.")
+    p.add_argument("--no-commit", action="store_true")
+
     # sync
     p = sub.add_parser("sync", help="Synchronize KB git repos.",
                        parents=[shared])
@@ -1307,6 +1659,7 @@ def main():
         "open": cmd_open,
         "search": cmd_search,
         "stage": cmd_stage,
+        "reindex": cmd_reindex,
         "sync": cmd_sync,
     }
 

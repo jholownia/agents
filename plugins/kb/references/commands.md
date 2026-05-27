@@ -247,6 +247,28 @@ Mode is determined by which flag is set. `--file` is mutually exclusive with `--
 - Does **not** scan content for secrets. Treat "no secrets in the KB" as agent guidance.
 - Auto-commits by default (`--no-commit` to skip).
 
+## reindex
+
+Rebuild `<kb>/index.json` — a structured manifest of every Markdown file under `knowledge/` and `notes/` (excluding READMEs and dotfiles).
+
+```bash
+kb reindex [<kb>]
+kb reindex [<kb>] --dry-run
+kb reindex [<kb>] --no-commit
+kb reindex --json
+```
+
+- Each entry: `path`, `title`, `section` (`knowledge` or `notes`), `tags`, `summary` (first prose paragraph, ~200 chars), `word_count`, `last_modified` (ISO, from git), optional `kind` (when frontmatter carries one).
+- Written to `<kb>/index.json` at the KB root — visible, committable, agent-readable.
+- Auto-commits "kb: rebuild index.json" when content changes; `--no-commit` to skip. Use `--no-commit` when rebuilding as part of a larger KB content commit.
+- `--dry-run` reports entry counts and diff without writing.
+- Falls back to the default KB when `<kb>` is omitted.
+- `INDEX.md` is left untouched — that file stays agent-curated narrative. The two indices serve different audiences: `INDEX.md` for humans/agents reading prose, `index.json` for machine retrieval.
+
+`kb recall` consults `index.json` first (title/tag/summary hits) before falling back to body grep. When `index.json` is absent, `kb recall` still works but prints a tip to run `kb reindex`.
+
+Refresh is explicit: `kb remember`, `kb stage`, and `kb-dream` do not auto-rebuild. Run `kb reindex --dry-run` during a writing cluster, then rebuild the generated index after the content changes are settled.
+
 ## sync
 
 Synchronize KB git repos with their remotes.

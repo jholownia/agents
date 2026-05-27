@@ -492,6 +492,121 @@ else
 fi
 
 echo ""
+echo "--- 12b. Reindex (index.json) ---"
+# Fresh KB has no knowledge pages and the seed notes/ + knowledge/ READMEs are
+# excluded, so the first reindex writes an empty array.
+run "reindex creates index.json" $KB --config "$CONFIG" reindex test --no-commit
+run "index.json exists" test -f "$TEST_KB/index.json"
+run "INDEX.md untouched (no markers)" bash -c "! grep -q 'kb:reindex' '$TEST_KB/INDEX.md'"
+# Add knowledge + notes pages and rebuild; assert structure.
+mkdir -p "$TEST_KB/knowledge"
+cat > "$TEST_KB/knowledge/widgets.md" <<'MD'
+---
+tags: [widgets, manufacturing]
+last_reviewed: 2026-05-26
+---
+# Widgets
+
+Widgets are small mechanical assemblies used in EMMA telemetry rigs. They
+ship from the Cardiff plant on Tuesdays.
+MD
+$KB --config "$CONFIG" remember "Demo fact about widgets and meters." --kb test --tags widgets,demo --no-commit >/dev/null 2>&1
+$KB --config "$CONFIG" reindex test --no-commit >/dev/null 2>&1
+# Verify index.json shape.
+if python3 -c "
+import json, sys
+data = json.load(open('$TEST_KB/index.json'))
+assert isinstance(data, list), data
+paths = [e['path'] for e in data]
+assert 'knowledge/widgets.md' in paths, paths
+assert any(p.startswith('notes/') and p.endswith('.md') for p in paths), paths
+widgets = next(e for e in data if e['path'] == 'knowledge/widgets.md')
+assert widgets['title'] == 'Widgets', widgets
+assert widgets['section'] == 'knowledge', widgets
+assert 'widgets' in widgets['tags'], widgets
+assert widgets['word_count'] > 0, widgets
+assert widgets['summary'].startswith('Widgets are small'), widgets
+" 2>/dev/null; then
+    PASS=$((PASS+1))
+    echo "  PASS  index.json has correct structure"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  index.json structure mismatch"
+fi
+# Idempotent: second run reports no change.
+OUT=$($KB --config "$CONFIG" reindex test --no-commit --json 2>&1)
+if echo "$OUT" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d.get('changed') is False, d
+"; then
+    PASS=$((PASS+1))
+    echo "  PASS  reindex idempotent on second run"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  reindex not idempotent (got: $OUT)"
+fi
+# Dry-run reports counts without writing.
+rm -f "$TEST_KB/index.json"
+OUT=$($KB --config "$CONFIG" reindex test --dry-run --json 2>&1)
+if echo "$OUT" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d.get('dry_run') is True, d
+assert d.get('entries', 0) >= 2, d
+assert d.get('changed') is True, d
+" && [ ! -f "$TEST_KB/index.json" ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  dry-run does not write index.json"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  dry-run wrote or misreported (got: $OUT)"
+fi
+# Rebuild for downstream tests.
+$KB --config "$CONFIG" reindex test --no-commit >/dev/null 2>&1
+# Recall consults index.json: query matching title should mark source=index.
+OUT=$($KB --config "$CONFIG" recall test --query Widgets --json 2>&1)
+if echo "$OUT" | python3 -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+assert any(r.get('source') == 'index' and r.get('path') == 'knowledge/widgets.md'
+           for r in data), data
+"; then
+    PASS=$((PASS+1))
+    echo "  PASS  recall query ranks index hits"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  recall did not surface index match (got: $OUT)"
+fi
+# Tag recall uses index.json (no rg required).
+OUT=$($KB --config "$CONFIG" recall test --tag widgets --json 2>&1)
+if echo "$OUT" | python3 -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+assert any(r.get('source') == 'index' for r in data), data
+assert any('widgets' in (r.get('tags') or []) for r in data), data
+"; then
+    PASS=$((PASS+1))
+    echo "  PASS  recall --tag uses index.json"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  recall --tag did not consult index.json (got: $OUT)"
+fi
+# Missing index.json: recall still works (body grep) and prints a tip.
+rm -f "$TEST_KB/index.json"
+TIP_OUT=$($KB --config "$CONFIG" recall test --query Widgets 2>&1)
+if echo "$TIP_OUT" | grep -q "reindex"; then
+    PASS=$((PASS+1))
+    echo "  PASS  recall hints at reindex when index.json missing"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  no reindex hint emitted (got: $TIP_OUT)"
+fi
+# Tidy.
+rm -f "$TEST_KB/knowledge/widgets.md"
+$KB --config "$CONFIG" reindex test --no-commit >/dev/null 2>&1 || true
+
+echo ""
 echo "--- 13. Metrics ---"
 EVENTS=$(wc -l < "$METRICS" 2>/dev/null || echo 0)
 if [ "$EVENTS" -gt 0 ]; then

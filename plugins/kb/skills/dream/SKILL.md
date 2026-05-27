@@ -108,7 +108,8 @@ Stop here unless the user asked to apply directly.
 When approved, edit the KB directly:
 
 - write synthesized pages under `knowledge/`
-- update `INDEX.md` when navigation changes
+- update `INDEX.md` by hand when navigation changes (semantic groupings are a curation task, not a generation task)
+- run `kb reindex <kb> --dry-run` after the writing cluster to check the generated manifest before committing canonical changes; rebuild with plain `kb reindex <kb>` once the content changes are settled
 - update `BRIEF.md` only when scope/key areas changed
 - stamp `last_reviewed: <ISO date>` in the frontmatter of any canonical page you touched
 - when a new note contradicts an existing canonical claim, **replace the old claim** and append a supersession entry to `LOG.md` listing both the consumed inbox note and the prior canonical claim (interference, not silent rewrite)
@@ -123,10 +124,13 @@ Run:
 
 ```bash
 kb status <kb>
+kb reindex <kb> --dry-run
 kb search <kb> "<representative topic>"
 git -C <kb-path> diff --stat
 git -C <kb-path> diff
 ```
+
+`kb reindex --dry-run` reports how many entries would land in `index.json` and whether anything changed. Run plain `kb reindex <kb>` once the canonical pages are settled, so downstream recall can use the refreshed manifest.
 
 Review the diff for overbroad rewrites, invented facts, lost provenance, and accidental raw transcript import.
 
