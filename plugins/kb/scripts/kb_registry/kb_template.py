@@ -5,28 +5,68 @@ import os
 # --- Template file contents ---
 
 AGENTS_MD = """\
-# Agent Rules
+# Conventions
 
-This KB owns its internal organization. Use these rules and the existing
-`knowledge/` structure before inventing new categories.
+You own this knowledge base. The `kb` CLI gives you safe file operations
+and retrieval aids; the organisation, vocabulary, and workflow are yours.
 
-## Capture
+**This file is yours to edit.** It's seeded with defaults that the
+consolidation research (Microsoft "AI agent amnesia", Karpathy's
+LLM-wiki gist) finds useful, but nothing in the CLI enforces them. If a
+default doesn't fit this KB's domain, change it here and proceed. Append
+a one-line entry to `LOG.md` when you do.
 
-- Stage raw or uncertain material in `inbox/`.
-- Preserve provenance when adding facts.
+## Working defaults
+
+### Capture
+
+- By default, stage raw or uncertain material in `inbox/` before treating
+  it as canonical. `kb stage --note|--file|--url` writes there.
+- Preserve provenance — link or name the source when you add a fact.
 - Prefer concise, durable notes over transcripts.
-- Do not store secrets, credentials, tokens, or private personal data.
+- Never store secrets, credentials, tokens, or private personal data.
 
-## Consolidation
+### Consolidation
 
-- Treat `inbox/` as source material and `knowledge/` as synthesized output.
-- Read `BRIEF.md`, `INDEX.md`, `LOG.md`, and existing `knowledge/` pages before canonical edits.
-- Propose a dry-run plan before rewriting canonical knowledge unless explicitly told to apply.
-- Update existing pages when they are the natural home.
-- Create new pages only when the existing structure has no good fit.
-- Preserve consumed inbox/source paths in canonical pages or `LOG.md`.
-- Mark consumed inbox notes processed; do not delete them in v0.
-- Use git history for auditability.
+- By default, `inbox/` holds source material and a separate canonical
+  section (`knowledge/` in the seed) holds synthesised output. Moving
+  material between them is a deliberate act — the research calls this
+  the "maturation gate" and credits it with most of the quality win.
+- Before rewriting canonical pages, read `BRIEF.md`, `INDEX.md`,
+  `LOG.md`, and existing pages so you don't duplicate or contradict.
+- Prefer updating an existing page over creating a new one.
+- Preserve consumed inbox/source paths in the canonical page or
+  `LOG.md` so the audit trail survives.
+- Use git history as the audit trail. The CLI auto-commits writes.
+
+## Organising the KB
+
+- The CLI auto-discovers top-level directories that contain `.md` files
+  and treats them as indexable sections (excluding `inbox/`, `sources/`,
+  `tools/`). You can grow `runbooks/`, `decisions/`, `specs/`,
+  `recipes/`, etc. without touching the plugin.
+- `kb stage --kind <label>` accepts any string. The CLI suggests a few
+  starting points (`decision`, `domain-fact`, `codebase-fact`,
+  `runbook-note`, `retrospective`, `followup`, `raw-note`); invent your
+  own when the domain wants them.
+- `INDEX.md` is the narrative, hand-curated entry point — group pages
+  by topic, audience, or workflow. `index.json` (rebuilt by
+  `kb reindex`) is the machine-readable manifest used by `kb recall`.
+
+## When to update this file
+
+If you find yourself working around a default repeatedly, change it
+here. Common cases:
+
+- A new top-level directory the KB needs (and the convention for what
+  lives there).
+- A domain-specific vocabulary of `--kind` labels.
+- A stricter or looser dry-run policy for canonical edits.
+- A retention rule for processed inbox material (default: move to
+  `inbox/processed/`, never delete in v0).
+
+Edits to this file are versioned in git like anything else. Use that
+history when reasoning about how the KB's conventions evolved.
 """
 
 BRIEF_TEMPLATE = """\

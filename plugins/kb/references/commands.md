@@ -124,7 +124,7 @@ kb remember "<text>" --kb <kb>
 
 ## recall
 
-Search synthesised material — both `notes/` and `knowledge/`, **excluding** the raw `inbox/`.
+Search synthesised material in indexable sections, **excluding** the raw `inbox/`.
 
 ```bash
 kb recall [<kb>] --query "<text>"
@@ -132,8 +132,8 @@ kb recall [<kb>] --tag <tag>
 kb recall --query "<text>" --max-results 5
 ```
 
-- `--query` runs lexical (`rg`-backed) search across `notes/` and `knowledge/`.
-- `--tag` lists notes whose frontmatter `tags:` includes the given tag.
+- `--query` checks `index.json` first, then runs lexical (`rg`-backed) search across indexable sections.
+- `--tag` lists pages whose frontmatter `tags:` includes the given tag.
 - One of `--query` or `--tag` is required.
 - Defaults: 20 total results.
 - Distinct from `kb search`, which covers the whole KB including the inbox. Use `recall` for "what do we know about X" style questions; use `search` when you specifically need to grep raw material.
@@ -220,7 +220,7 @@ Mode is determined by which flag is set. `--file` is mutually exclusive with `--
 - Agent-written observations: memory, preferences, decisions worth remembering.
 - Written with YAML frontmatter (`created_at`, `kind`, optional `source`, optional `title`).
 - Notes own their own headings — the CLI does not prepend one.
-- Kinds: `decision`, `domain-fact`, `codebase-fact`, `runbook-note`, `retrospective`, `raw-note` (default).
+- `--kind` accepts any string and is written verbatim to frontmatter. Suggested starting points: `decision`, `domain-fact`, `codebase-fact`, `runbook-note`, `retrospective`, `followup`, `raw-note` (default when `--kind` is omitted). Invent KB-specific kinds (`hypothesis`, `open-question`, `benchmark`, ...) freely.
 
 ### Documents (`--file`)
 
@@ -249,7 +249,7 @@ Mode is determined by which flag is set. `--file` is mutually exclusive with `--
 
 ## reindex
 
-Rebuild `<kb>/index.json` — a structured manifest of every Markdown file under `knowledge/` and `notes/` (excluding READMEs and dotfiles).
+Rebuild `<kb>/index.json` — a structured manifest of every Markdown file under auto-discovered indexable sections (excluding READMEs and dotfiles).
 
 ```bash
 kb reindex [<kb>]
@@ -258,7 +258,8 @@ kb reindex [<kb>] --no-commit
 kb reindex --json
 ```
 
-- Each entry: `path`, `title`, `section` (`knowledge` or `notes`), `tags`, `summary` (first prose paragraph, ~200 chars), `word_count`, `last_modified` (ISO, from git), optional `kind` (when frontmatter carries one).
+- Each entry: `path`, `title`, `section` (top-level directory), `tags`, `summary` (first prose paragraph, ~200 chars), `word_count`, `last_modified` (ISO, from git), optional `kind` (when frontmatter carries one).
+- Indexable sections are top-level directories that contain Markdown files, excluding dot-directories, `inbox/`, `sources/`, and `tools/`.
 - Written to `<kb>/index.json` at the KB root — visible, committable, agent-readable.
 - Auto-commits "kb: rebuild index.json" when content changes; `--no-commit` to skip. Use `--no-commit` when rebuilding as part of a larger KB content commit.
 - `--dry-run` reports entry counts and diff without writing.
@@ -271,7 +272,7 @@ Refresh is explicit: `kb remember`, `kb stage`, and `kb-dream` do not auto-rebui
 
 ## forget
 
-Remove a single page under `knowledge/` or `notes/`.
+Remove a single page from an indexable section.
 
 ```bash
 kb forget [<kb>] <path>
@@ -281,7 +282,7 @@ kb forget [<kb>] <path> --no-commit
 kb forget --json [<kb>] <path>
 ```
 
-- `<path>` must be relative to the KB root and live under `knowledge/` or `notes/`. Inbox material is out of scope (use `git rm` or move into `inbox/processed/`).
+- `<path>` must be relative to the KB root and live under an indexable section. Inbox/source/tool material is out of scope (use direct git operations or move inbox material into `inbox/processed/`).
 - Refuses contract files (`BRIEF.md`, `AGENTS.md`, `INDEX.md`, `LOG.md`, `index.json`, `README.md`, `.gitignore`) and any path that escapes the KB root.
 - Removes the file, appends a one-line entry to `LOG.md` in the form `- YYYY-MM-DD: forgot PATH — REASON`, and auto-commits `kb: forget PATH` covering both the deletion and the log update. `--no-commit` leaves the changes uncommitted.
 - Falls back to the default KB when `<kb>` is omitted.
@@ -293,9 +294,9 @@ Forget removes the file from the agent's working surface — `kb recall`, `kb se
 ### What forget does NOT do
 
 - **Auto-rebuild `index.json`.** Run `kb reindex <kb>` afterwards. (Stale-index tip is printed.)
-- **Auto-edit `INDEX.md`.** If the forgotten path is referenced from the agent-curated `INDEX.md`, forget warns and leaves the link in place — edit by hand. The check is a literal `](knowledge/<path>` / `](notes/<path>` substring scan.
+- **Auto-edit `INDEX.md`.** If the forgotten path is referenced from the agent-curated `INDEX.md`, forget warns and leaves the link in place — edit by hand. The check is a literal Markdown-link substring scan for that relative path.
 
-Exit codes follow the global table at the top of this file: `1` on filesystem/commit failure or missing file, `2` on bad arguments (e.g. path outside `knowledge/` or `notes/`), `3` on safety rejection (traversal, protected file).
+Exit codes follow the global table at the top of this file: `1` on filesystem/commit failure or missing file, `2` on bad arguments (e.g. path outside indexable sections), `3` on safety rejection (traversal, protected file).
 
 ## sync
 

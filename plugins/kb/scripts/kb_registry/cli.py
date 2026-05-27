@@ -62,7 +62,11 @@ DEFAULT_BRIEF_MAX = 12000
 DEFAULT_OPEN_MAX = 20000
 DEFAULT_SEARCH_MAX = 20
 
-STAGE_KINDS = [
+# Suggested values for the `--kind` flag on `kb stage`. The CLI accepts any
+# string — these are starting points the consolidation research finds useful,
+# not an enum. Agents may invent KB-specific kinds (`hypothesis`,
+# `open-question`, `benchmark`, ...) and write them straight into frontmatter.
+SUGGESTED_STAGE_KINDS = [
     "decision", "domain-fact", "codebase-fact",
     "runbook-note", "retrospective", "followup", "raw-note",
 ]
@@ -686,7 +690,6 @@ def _index_md_links_path(kb_path, rel_path):
     return needle_plain in text or needle_dot in text
 
 
-FORGET_ALLOWED_ROOTS = ("knowledge/", "notes/")
 FORGET_PROTECTED_FILES = {
     "BRIEF.md", "AGENTS.md", "INDEX.md", "LOG.md", "index.json", "README.md",
     ".gitignore",
@@ -694,7 +697,7 @@ FORGET_PROTECTED_FILES = {
 
 
 def cmd_forget(args, config, config_path):
-    """Remove a single page from `knowledge/` or `notes/`.
+    """Remove a single page from an indexable section.
 
     Git remembers the deletion, so this is a soft forget for retrieval but a
     hard remove for the agent's working surface. Appends a one-line LOG.md
@@ -726,12 +729,24 @@ def cmd_forget(args, config, config_path):
         print(f"Error: path escapes KB root: {raw_target}", file=sys.stderr)
         return EXIT_SAFETY
 
-    # Scope: only knowledge/ + notes/. inbox/ and sources/ are out of scope
-    # (use git rm or stage processed/ for inbox).
-    if not any(rel.startswith(root) for root in FORGET_ALLOWED_ROOTS):
-        allowed = " or ".join(r.rstrip("/") for r in FORGET_ALLOWED_ROOTS)
-        print(f"Error: kb forget only operates under {allowed}/. "
-              f"Got: {rel}", file=sys.stderr)
+    # Scope: only auto-discovered indexable sections (anything *not* under
+    # inbox/, sources/, tools/, .git/, or a non-section top-level dir).
+    # Mirrors what `kb reindex` indexes, so `forget` and the index stay
+    # consistent as agents add new top-level dirs.
+    allowed_sections = _discover_indexable_sections(kb_path)
+    if not any(rel.startswith(section + "/") for section in allowed_sections):
+        if allowed_sections:
+            hint = " or ".join(allowed_sections)
+            print(
+                f"Error: kb forget only operates under indexable sections "
+                f"({hint}/). Got: {rel}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "Error: KB has no indexable sections — nothing to forget.",
+                file=sys.stderr,
+            )
         return EXIT_ARGS
 
     # Defense against forgetting contract files even if they somehow ended up
@@ -817,7 +832,7 @@ def cmd_forget(args, config, config_path):
 
 
 def cmd_recall(args, config, config_path):
-    """Search synthesised material — notes/ and knowledge/, excluding inbox/.
+    """Search synthesised material in indexable sections, excluding inbox/.
 
     Prefers `index.json` (built by `kb reindex`) for fast title/tag/summary
     matches, then merges body-grep hits underneath. Falls back to body grep
@@ -863,25 +878,28 @@ def cmd_recall(args, config, config_path):
                             _entry_to_result(entry, kb["name"], "index")
                         )
                 continue
-            # Fallback: walk notes/ frontmatter directly.
-            notes_root = os.path.join(kb_path, "notes")
-            if not os.path.isdir(notes_root):
-                continue
-            for dp, dns, fns in os.walk(notes_root):
-                for fname in sorted(fns):
-                    if not fname.endswith(".md") or fname == "README.md":
-                        continue
-                    full = os.path.join(dp, fname)
-                    meta = _read_frontmatter(full)
-                    raw_tags = meta.get("tags", "")
-                    if not raw_tags:
-                        continue
-                    cleaned = raw_tags.strip().lstrip("[").rstrip("]")
-                    file_tags = [
-                        t.strip().strip('"').strip("'")
-                        for t in cleaned.split(",")
-                    ]
-                    if tag in file_tags:
+            # Fallback: walk indexable sections and inspect frontmatter.
+            for section in _discover_indexable_sections(kb_path):
+                section_root = os.path.join(kb_path, section)
+                for dp, dns, fns in os.walk(section_root):
+                    dns[:] = sorted(d for d in dns if not d.startswith("."))
+                    for fname in sorted(fns):
+                        if (not fname.endswith(".md") or
+                                fname == "README.md" or
+                                fname.startswith(".")):
+                            continue
+                        full = os.path.join(dp, fname)
+                        meta = _read_frontmatter(full)
+                        raw_tags = meta.get("tags", "")
+                        if not raw_tags:
+                            continue
+                        cleaned = raw_tags.strip().lstrip("[").rstrip("]")
+                        file_tags = [
+                            t.strip().strip('"').strip("'")
+                            for t in cleaned.split(",")
+                        ]
+                        if tag not in file_tags:
+                            continue
                         rel_path = os.path.relpath(full, kb_path)
                         all_results.append({
                             "kb": kb["name"],
@@ -910,9 +928,9 @@ def cmd_recall(args, config, config_path):
                 all_results.append(result)
                 seen_paths.add(result["path"])
 
-        # Body grep across notes/ + knowledge/. Skip paths already surfaced
+        # Body grep across indexable sections. Skip paths already surfaced
         # by the index so we don't duplicate rows.
-        for sub_dir in ("notes", "knowledge"):
+        for sub_dir in _discover_indexable_sections(kb_path):
             scoped_root = os.path.join(kb_path, sub_dir)
             if not os.path.isdir(scoped_root):
                 continue
@@ -1291,7 +1309,12 @@ def cmd_stage(args, config, config_path):
 
 
 INDEX_FILENAME = "index.json"
-INDEX_SECTIONS = ("knowledge", "notes")
+# Top-level dirs that hold staged/raw material or non-content scaffolding,
+# and so should not be indexed as canonical sections. Everything else under
+# the KB root that contains .md files is auto-discovered as a section, so
+# agents can grow `runbooks/`, `decisions/`, `specs/`, etc. without touching
+# the CLI.
+NON_INDEXED_SECTIONS = frozenset({"inbox", "sources", "tools"})
 _INDEX_SUMMARY_MAX = 200
 
 
@@ -1385,14 +1408,40 @@ def _git_last_modified(kb_path, rel_path):
         return ""
 
 
-def _collect_index_files(kb_path):
-    """Yield (rel_path, section) for every .md file under indexed sections,
-    excluding README.md and dotfiles. Walks subdirectories so notes/YYYY/MM
-    layouts are included."""
-    for section in INDEX_SECTIONS:
-        root = os.path.join(kb_path, section)
-        if not os.path.isdir(root):
+def _discover_indexable_sections(kb_path):
+    """Return sorted top-level dirnames under kb_path that hold canonical
+    content. Skips dotfiles, inbox/, sources/, tools/, and any dir whose tree
+    contains no .md files. Lets agents grow new top-level sections without
+    a CLI change."""
+    if not os.path.isdir(kb_path):
+        return []
+    sections = []
+    for entry in sorted(os.listdir(kb_path)):
+        if entry.startswith("."):
             continue
+        if entry in NON_INDEXED_SECTIONS:
+            continue
+        full = os.path.join(kb_path, entry)
+        if not os.path.isdir(full):
+            continue
+        # Require at least one .md file in the tree to count as a section.
+        has_md = False
+        for dirpath, _, filenames in os.walk(full):
+            if any(fn.endswith(".md") and fn != "README.md"
+                   for fn in filenames):
+                has_md = True
+                break
+        if has_md:
+            sections.append(entry)
+    return sections
+
+
+def _collect_index_files(kb_path):
+    """Yield (rel_path, section) for every .md file under auto-discovered
+    sections, excluding README.md and dotfiles. Walks subdirectories so
+    layouts like `notes/YYYY/MM/...` are included."""
+    for section in _discover_indexable_sections(kb_path):
+        root = os.path.join(kb_path, section)
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
             for fn in sorted(filenames):
@@ -1448,10 +1497,10 @@ def _build_index(kb_path):
 def cmd_reindex(args, config, config_path):
     """Build or refresh `<kb>/index.json`.
 
-    Walks `knowledge/` and `notes/` and emits a structured manifest (path,
-    title, section, tags, summary, word_count, last_modified, optional
-    kind) that `kb recall` can consult before doing body grep. The
-    agent-curated `INDEX.md` is left untouched.
+    Walks auto-discovered indexable sections and emits a structured
+    manifest (path, title, section, tags, summary, word_count,
+    last_modified, optional kind) that `kb recall` can consult before
+    doing body grep. The agent-curated `INDEX.md` is left untouched.
     """
     kb, err = _resolve_kb(config, args.kb)
     if err:
@@ -1708,7 +1757,7 @@ def build_parser():
     # recall
     p = sub.add_parser(
         "recall",
-        help="Search synthesised material (notes/ + knowledge/, excl. inbox).",
+        help="Search synthesised material in indexable sections.",
         parents=[shared],
     )
     p.add_argument("kb", nargs="?")
@@ -1749,8 +1798,14 @@ def build_parser():
     p.add_argument("--note", help="Note body, or description when paired with --url.")
     p.add_argument("--file", help="Path to a text file; staged verbatim.")
     p.add_argument("--url", help="URL pointer; kb-dream fetches/summarises later.")
-    p.add_argument("--kind", choices=STAGE_KINDS, default=None,
-                   help="Note kind (notes only). Forced to 'url' with --url.")
+    p.add_argument(
+        "--kind", default=None,
+        help=(
+            "Free-form kind label written to frontmatter. Suggested values: "
+            + ", ".join(SUGGESTED_STAGE_KINDS)
+            + ". Any string is accepted. Forced to 'url' with --url."
+        ),
+    )
     p.add_argument("--title")
     p.add_argument("--source")
     p.add_argument("--no-commit", action="store_true")
@@ -1770,7 +1825,7 @@ def build_parser():
     # forget
     p = sub.add_parser(
         "forget",
-        help="Remove a single page under knowledge/ or notes/.",
+        help="Remove a single page from an indexable section.",
         parents=[shared],
     )
     p.add_argument("kb", nargs="?")

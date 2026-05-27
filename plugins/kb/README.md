@@ -2,6 +2,12 @@
 
 Claude Code plugin for agent-maintained knowledge bases — persistent, scoped, searchable, git-backed memory that survives across sessions and project repositories.
 
+## Design principle
+
+> The CLI offers safe file operations and retrieval aids. The agent decides how this KB organises and evolves its knowledge, guided by the per-KB `AGENTS.md` — which the agent is free to edit.
+
+The seeded directory layout, kind labels, and skill workflows are *defaults* sourced from the consolidation research (Microsoft "AI agent amnesia", Karpathy's LLM-wiki gist). None are enforced — override them per KB by editing `AGENTS.md`.
+
 ## What it does
 
 Provides seven scoped skills over a shared `kb` CLI:
@@ -12,9 +18,9 @@ Provides seven scoped skills over a shared `kb` CLI:
 | `kb:info` | list KBs, read briefs, carries the three-layer scoping rules |
 | `kb:remember` | append short single-paragraph facts to `notes/` |
 | `kb:stage` | stage notes / files / URL pointers / follow-ups into `inbox/` |
-| `kb:recall` | search `notes/` + `knowledge/`, list pending inbox material |
+| `kb:recall` | search indexable KB sections, list pending inbox material |
 | `kb:retrospective` | end-of-session capture of expensive-to-derive knowledge |
-| `kb:dream` | consolidate `inbox/` → `knowledge/`, dry-run-first |
+| `kb:dream` | consolidate `inbox/` into canonical pages, dry-run-first |
 
 Each skill is small and triggered by sharp language patterns (see each `SKILL.md`'s `description:`).
 
@@ -27,7 +33,7 @@ The KB is *one* of three persistence layers — use the right one:
 | Personal user preferences ("I prefer rebase") | Claude's auto-memory — NOT the KB |
 | Normative workflow rules ("don't push to master") | CLAUDE.md / AGENTS.md — NOT the KB |
 | Short project / domain / codebase facts | KB `notes/` via `kb remember` |
-| Decisions, runbook material, longer-form facts | KB `inbox/` → `knowledge/` via `kb stage` + `kb-dream` |
+| Decisions, runbook material, longer-form facts | KB `inbox/` → canonical pages via `kb stage` + `kb-dream` |
 | URL pointers to read later | KB `inbox/` via `kb stage --url` |
 
 **Litmus test:** would re-deriving this fact require meaningful work? Yes → KB. Trivial to re-ask → auto-memory.
@@ -100,13 +106,13 @@ Resolution order (highest precedence first):
 
 Python 3 stdlib only. Lexical search via `rg`. Markdown/Git KBs. No MCP, vector search, or autonomous rewrites.
 
-Inbox consolidation is intentionally skill-led: `kb:dream` runs only when the user invokes it, produces a dry-run plan first, and writes to `knowledge/` directly. The CLI guards against accidental canonical writes.
+Inbox consolidation is intentionally skill-led: `kb:dream` runs only when the user invokes it, produces a dry-run plan first, and writes canonical pages directly. The CLI guards against accidental canonical writes.
 
 ## Known gaps (not in v0)
 
 These are real gaps the subagent dogfood pass surfaced; deferred to v0.1+:
 
-- **Mutation of existing notes** — no skill owns "forget that we said X" / "remove the note about Y" / "fix the X note". Workaround: edit the file directly in `notes/` or `inbox/` and commit. Mass mutation would benefit from a `kb forget` / `kb supersede` verb (already on the v0.1+ list).
+- **Mutation of existing notes beyond deletion** — `kb forget` removes a page from the working surface, but there is no CLI verb for "edit this note's text" or "retag this page". Workaround: edit the file/frontmatter directly and commit.
 - **Re-tagging existing notes** — same: edit frontmatter directly. Tag mutations are append-only-from-the-CLI today.
 - **Dream-history queries beyond `kb open <kb> LOG.md`** — there's no CLI verb to filter LOG entries by date, kind, or supersession. `kb open` is sufficient for v0.
 - **Documents staged via `--file` cannot carry kind/title/source metadata** — by design (documents have no frontmatter), but means a longer retrospective file has to be staged via `--note "$(cat file.md)"` to get the `kind: retrospective` label.

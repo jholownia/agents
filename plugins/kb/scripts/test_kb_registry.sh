@@ -493,8 +493,8 @@ fi
 
 echo ""
 echo "--- 12b. Reindex (index.json) ---"
-# Fresh KB has no knowledge pages and the seed notes/ + knowledge/ READMEs are
-# excluded, so the first reindex writes an empty array.
+# Fresh KB has no indexable content pages and the seed READMEs are excluded,
+# so the first reindex writes an empty array.
 run "reindex creates index.json" $KB --config "$CONFIG" reindex test --no-commit
 run "index.json exists" test -f "$TEST_KB/index.json"
 run "INDEX.md untouched (no markers)" bash -c "! grep -q 'kb:reindex' '$TEST_KB/INDEX.md'"
@@ -607,7 +607,63 @@ rm -f "$TEST_KB/knowledge/widgets.md"
 $KB --config "$CONFIG" reindex test --no-commit >/dev/null 2>&1 || true
 
 echo ""
-echo "--- 12c. Forget ---"
+echo "--- 12c. Agent-owned flexibility ---"
+# Stage accepts an invented kind label that isn't in the suggestion list.
+run "stage accepts arbitrary --kind" $KB --config "$CONFIG" stage test --note "Open question about meter calibration." --kind hypothesis
+# Verify the frontmatter carries the agent-chosen kind verbatim.
+LATEST=$(ls -t "$TEST_KB"/inbox/*/*/*.md 2>/dev/null | head -1)
+if [ -n "$LATEST" ] && head -10 "$LATEST" | grep -q "^kind: \"hypothesis\""; then
+    PASS=$((PASS+1))
+    echo "  PASS  arbitrary --kind written to frontmatter verbatim"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  arbitrary --kind not written (file: $LATEST)"
+fi
+# Reindex auto-discovers a brand-new top-level section the agent invents.
+mkdir -p "$TEST_KB/runbooks"
+cat > "$TEST_KB/runbooks/incident-playbook.md" <<'MD'
+# Incident playbook
+
+Step-by-step response for production incidents.
+MD
+$KB --config "$CONFIG" reindex test --no-commit >/dev/null 2>&1
+if python3 -c "
+import json
+data = json.load(open('$TEST_KB/index.json'))
+assert any(e['section'] == 'runbooks' and e['path'] == 'runbooks/incident-playbook.md' for e in data), data
+" 2>/dev/null; then
+    PASS=$((PASS+1))
+    echo "  PASS  reindex auto-discovers new top-level section"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  reindex did not pick up runbooks/ section"
+fi
+# Recall searches the same auto-discovered sections, not just notes/knowledge.
+rm -f "$TEST_KB/index.json"
+OUT=$($KB --config "$CONFIG" recall test --query incidents --json 2>&1)
+if echo "$OUT" | python3 -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+assert any(r.get('source') == 'body' and r.get('path') == 'runbooks/incident-playbook.md'
+           for r in data), data
+"; then
+    PASS=$((PASS+1))
+    echo "  PASS  recall body search covers discovered sections"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  recall missed discovered section body hit (got: $OUT)"
+fi
+$KB --config "$CONFIG" reindex test --no-commit >/dev/null 2>&1
+# Forget works on the auto-discovered section too.
+run "forget operates on discovered section" $KB --config "$CONFIG" forget test runbooks/incident-playbook.md --reason "test cleanup" --no-commit
+run "forget removed page in discovered section" bash -c "! test -f '$TEST_KB/runbooks/incident-playbook.md'"
+# Forget still refuses inbox/.
+run_fail 2 "forget still refuses inbox/" $KB --config "$CONFIG" forget test inbox/whatever.md
+# Tidy: the agent might still want runbooks/ empty.
+rmdir "$TEST_KB/runbooks" 2>/dev/null || true
+
+echo ""
+echo "--- 12d. Forget ---"
 # Seed a forgettable knowledge page + a notes file via remember.
 cat > "$TEST_KB/knowledge/scratch.md" <<'MD'
 # Scratch
@@ -617,7 +673,7 @@ MD
 NOTE_PATH=$($KB --config "$CONFIG" remember "Temporary fact about scratch." --kb test --tags scratch --no-commit --json 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)['path'])")
 git -C "$TEST_KB" add -A >/dev/null 2>&1
 git -C "$TEST_KB" commit -m "test: seed forget fixtures" >/dev/null 2>&1 || true
-# Refuse paths outside knowledge/ or notes/.
+# Refuse paths outside indexable sections.
 run_fail 2 "forget refuses inbox/" $KB --config "$CONFIG" forget test inbox/something.md
 run_fail 3 "forget refuses BRIEF.md via traversal" $KB --config "$CONFIG" forget test knowledge/../BRIEF.md
 run_fail 3 "forget refuses path traversal" $KB --config "$CONFIG" forget test ../etc/passwd
