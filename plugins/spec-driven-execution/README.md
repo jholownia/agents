@@ -10,7 +10,7 @@ The change folder is the durable unit across sessions. A fresh agent dispatched 
 
 ## What it does
 
-Provides one skill, `spec-driven-execution`, with a six-phase workflow:
+Provides one skill, `spec-driven-execution`, with a seven-phase workflow (0–6):
 
 | Phase | What |
 |---|---|

@@ -26,21 +26,7 @@ Every knowledge base must contain:
 
 ### Three-layer scoping (what goes where)
 
-The axis is **durable fact vs ephemeral state**, not "personal vs project":
-
-| What                                                                          | Where                                                                                        |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| User preferences about agent behaviour ("address me as X", "I prefer rebase") | Claude's auto-memory                                                                         |
-| Short-lived project state (current task, last error seen)                     | Claude's auto-memory                                                                         |
-| Normative workflow rules ("don't push to master")                             | `CLAUDE.md` / `AGENTS.md`                                                                    |
-| Short durable facts — project, domain, codebase, or personal-life             | KB `notes/` via `kb remember`                                                                |
-| Decisions, runbook material, longer-form facts                                | KB `inbox/` via `kb stage`, consolidated by `kb-dream` into an appropriate canonical section |
-| URL pointers to read later                                                    | KB `inbox/` via `kb stage --url`                                                             |
-| Project TODOs that should survive sessions                                    | KB `inbox/` via `kb stage --kind followup`                                                   |
-
-Litmus test for the KB: would re-deriving the fact require meaningful work (grep, ask the user, synthesise across sources)? If yes → KB. If you could just re-ask the user trivially, or it's only relevant to the current session → auto-memory.
-
-**Personal vs project KBs**: if the user has a personal `user-kb` _and_ one or more project KBs, route by content — personal-life facts to `user-kb`, project facts to the project KB. If only a project KB is registered, prefer auto-memory for personal facts rather than misfiling.
+Routing across Claude's auto-memory, project `CLAUDE.md` / `AGENTS.md`, and the KB is documented in [scoping.md](scoping.md). The axis is durable fact vs ephemeral state, not "personal vs project". See that file for the full table, litmus test, and personal-vs-project KB routing.
 
 ## BRIEF.md
 

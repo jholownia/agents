@@ -1,7 +1,7 @@
 ---
 description: Create or clone a knowledge base and register it.
 argument-hint: <name> [--path <path>] [--remote <url>] [--description "<text>"] [--default]
-allowed-tools: ["Bash"]
+allowed-tools: ["Bash(kb:*)"]
 ---
 
 # Bootstrap a knowledge base

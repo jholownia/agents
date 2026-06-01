@@ -1,7 +1,7 @@
 ---
 description: Register an existing knowledge base directory with the kb registry.
 argument-hint: <name> --path <path> [--remote <url>] [--description "<text>"] [--default]
-allowed-tools: ["Bash"]
+allowed-tools: ["Bash(kb:*)"]
 ---
 
 # Register an existing knowledge base

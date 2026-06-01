@@ -10,36 +10,45 @@ The seeded directory layout, kind labels, and skill workflows are *defaults* sou
 
 ## What it does
 
-Provides seven scoped skills over a shared `kb` CLI:
+Three Claude Code surfaces over a shared `kb` CLI:
+
+**Skills** (Claude auto-triggers on description match):
 
 | Skill | Purpose |
 |---|---|
 | `kb:registry` | add / remove / bootstrap / sync / status KBs — lifecycle + state |
-| `kb:info` | list KBs, read briefs, carries the three-layer scoping rules |
+| `kb:info` | list KBs, read briefs, points at the three-layer scoping rules |
 | `kb:remember` | append short single-paragraph facts to `notes/` |
-| `kb:stage` | stage notes / files / URL pointers / follow-ups into `inbox/` |
+| `kb:stage` | stage notes / files / URL pointers / directories into `inbox/` |
 | `kb:recall` | search indexable KB sections, list pending inbox material |
 | `kb:retrospective` | end-of-session capture of expensive-to-derive knowledge |
-| `kb-dream` *(agent)* | consolidate `inbox/` into canonical pages, dry-run-first |
 
-Each skill is small and triggered by sharp language patterns (see each `SKILL.md`'s `description:`).
+**Slash commands** (user-typed; deterministic CLI passthroughs):
+
+| Command | Wraps |
+|---|---|
+| `/kb:bootstrap <name> [--path ...]` | `kb bootstrap` |
+| `/kb:add <name> --path ... [--remote ...]` | `kb add` |
+| `/kb:status [<kb>] [--all]` | `kb status` |
+| `/kb:sync [<kb>] [--all]` | `kb sync` |
+
+**Agent**:
+
+| Agent | Purpose |
+|---|---|
+| `kb-dream` | consolidate a KB's `inbox/` into canonical pages — dry-run plan, then apply on approval. Multi-step autonomous workflow with its own tool budget. |
+
+Skills are auto-triggered by sharp language patterns (see each `SKILL.md`'s `description:`). Commands give the user explicit `/`-typed entry points for the registry lifecycle. The agent handles consolidation because it's a multi-step judgment workflow, not a one-shot operation.
 
 ## Three-layer scoping
 
-The KB is *one* of three persistence layers. The axis is **durable fact vs ephemeral state**, not "personal vs project":
+The KB is *one* of three persistence layers — alongside Claude's auto-memory and project `CLAUDE.md` / `AGENTS.md`. The axis is **durable fact vs ephemeral state**, not "personal vs project". Quick summary:
 
-| What | Where |
-|---|---|
-| User preferences about agent behaviour ("address me as bro", "I prefer rebase") | Claude's auto-memory |
-| Short-lived project state (current task, last error seen) | Claude's auto-memory |
-| Normative workflow rules ("don't push to master") | CLAUDE.md / AGENTS.md |
-| Durable facts — project, domain, codebase, **or personal-life** | KB `notes/` via `kb remember` |
-| Decisions, runbook material, longer-form facts | KB `inbox/` → canonical pages via `kb stage` + `kb-dream` |
-| URL pointers to read later | KB `inbox/` via `kb stage --url` |
+- **Durable facts** (project, domain, codebase, or personal-life) → KB.
+- **User preferences about agent behaviour** and **short-lived project state** → auto-memory.
+- **Normative workflow rules** → `CLAUDE.md` / `AGENTS.md`.
 
-**Litmus test:** would re-deriving this fact require meaningful work? Yes → KB. Trivial to re-ask, or only relevant to the current session → auto-memory.
-
-Personal-life facts (birthdays, contacts, addresses, family info) qualify by the litmus test. If you want them in a KB, register a `user-kb` and let durable personal data land there. Project KBs should not hold personal data.
+Personal-life facts qualify if you have a personal `user-kb`; otherwise prefer auto-memory rather than misfiling into a project KB. Full routing rules, examples, and the litmus test: [references/scoping.md](references/scoping.md).
 
 ## Quick start
 

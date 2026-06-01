@@ -1,7 +1,7 @@
 ---
 description: Pull and push the git repos backing one or all knowledge bases.
 argument-hint: [<kb>] [--all]
-allowed-tools: ["Bash"]
+allowed-tools: ["Bash(kb:*)"]
 ---
 
 # Sync KBs with their git remotes

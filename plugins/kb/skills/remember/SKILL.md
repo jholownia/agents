@@ -19,20 +19,14 @@ If you're stating a single fact you'd want to look up later by tag or substring 
 
 ## When to use vs other layers
 
-| Fact | Layer |
-|---|---|
-| Ephemeral user preferences | Claude's auto-memory — NOT the KB |
-| Normative workflow rules | CLAUDE.md / AGENTS.md — NOT the KB |
-| **Short project / domain / codebase facts** | **`kb remember`** (this skill) → KB `notes/` |
-| Longer-form decisions / runbook material | `kb stage` → KB `inbox/` |
-
-**Litmus test:** would re-deriving this fact require meaningful work? Yes → KB. Trivial to re-ask → auto-memory.
+Quick rule: durable single-sentence fact → here. Anything ephemeral, preference-shaped, or workflow-normative belongs elsewhere. The full routing rules (including personal vs project KB selection and the litmus test) live in `${CLAUDE_PLUGIN_ROOT}/references/scoping.md`.
 
 Good examples:
 
-- "The nightly job runs at 02:00 UTC via cron."
-- "We abandoned PostgreSQL JSON columns in 2024 — search latency was 3x."
-- "We should look into <library name> library next time we work on X feature."
+- "The nightly job runs at 02:00 UTC via cron." (project)
+- "We abandoned PostgreSQL JSON columns in 2024 — search latency was 3x." (domain)
+- "My birthday is 15 November." (personal — goes to a personal `user-kb` if registered)
+- "We should look into &lt;library name&gt; next time we work on X feature." (follow-up)
 
 ## Command
 
@@ -48,4 +42,4 @@ kb remember "<one-sentence fact>" --kb <kb>
 
 Do not also write the same fact to auto-memory. One source of truth per fact.
 
-Full details: `${CLAUDE_PLUGIN_ROOT}/references/commands.md` and `${CLAUDE_PLUGIN_ROOT}/references/kb-contract.md`.
+Full details: `${CLAUDE_PLUGIN_ROOT}/references/scoping.md` (routing rules), `${CLAUDE_PLUGIN_ROOT}/references/commands.md`, `${CLAUDE_PLUGIN_ROOT}/references/kb-contract.md`.

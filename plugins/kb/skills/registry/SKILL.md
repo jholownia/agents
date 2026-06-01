@@ -8,7 +8,20 @@ version: 0.2.0
 
 Lifecycle management and state inspection for KBs. Invoked when the user explicitly asks to mutate the registry, or check whether a KB is in a state where mutations are safe.
 
-## Commands
+## Parallel surface: slash commands
+
+Four `/kb:*` slash commands ship alongside this skill — they are deterministic CLI passthroughs the user can type directly. Prefer the command when the user has named the operation explicitly; this skill catches conversational phrasings ("let's bootstrap a KB", "register that directory as work-kb"):
+
+| Command | Wraps |
+|---|---|
+| `/kb:bootstrap <name> [--path ...] [--remote ...]` | `kb bootstrap` |
+| `/kb:add <name> --path ... [--remote ...]` | `kb add` |
+| `/kb:status [<kb>] [--all]` | `kb status` |
+| `/kb:sync [<kb>] [--all]` | `kb sync` |
+
+`kb remove` is not surfaced as a slash command — it's mutating and should remain explicit-flag-only via the CLI.
+
+## CLI commands
 
 ```bash
 kb bootstrap <name> [--path <path>] [--remote <url>]   # create or clone a KB

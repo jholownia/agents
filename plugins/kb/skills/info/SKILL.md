@@ -16,18 +16,15 @@ The **first** skill to reach for in a session that might touch a KB. Cheap, read
 
 ## Three-layer scoping — where does this fact go?
 
-| Fact | Layer |
-|---|---|
-| Personal user preferences ("I prefer rebase", "I like X") | Claude's **auto-memory** — NOT the KB |
-| Normative workflow rules ("don't push to master") | **CLAUDE.md** / **AGENTS.md** — NOT the KB |
-| Short project / domain / codebase facts ("EMMA's nightly job runs at 02:00 UTC") | KB `notes/` via `kb remember` |
-| Decisions, runbook material, longer-form facts | KB `inbox/` via `kb stage`, consolidated to `knowledge/` by `kb-dream` |
-| URL pointers to read later | KB `inbox/` via `kb stage --url` |
-| Project TODOs that should survive sessions | KB `inbox/` via `kb stage --kind followup` |
+Three layers exist: Claude's auto-memory, project `CLAUDE.md`/`AGENTS.md`, and the KB. The axis is **durable fact vs ephemeral state**, not "personal vs project". Full routing rules, examples, and the litmus test live in `${CLAUDE_PLUGIN_ROOT}/references/scoping.md`.
 
-**Litmus test:** would re-deriving this fact require meaningful work (grep, ask the user, synthesise across sources)? Yes → KB. Could just re-ask the user trivially → auto-memory.
+Quick summary:
 
-**Anti-duplication rule.** If you came here via an auto-memory cue ("remember that <project fact>"), the fact goes to the KB *only* — do not also write it to auto-memory. One source of truth per fact; pointers from auto-memory to KB content create drift.
+- **Durable facts** (project, domain, codebase, **or personal-life**) → KB via `kb remember` / `kb stage`.
+- **User preferences about agent behaviour** (`"address me as bro"`, `"I prefer rebase"`) and **short-lived project state** → auto-memory.
+- **Normative workflow rules** (`"don't push to master"`) → `CLAUDE.md` / `AGENTS.md`.
+
+**Anti-duplication rule.** One source of truth per fact. Don't mirror a KB fact into auto-memory or vice versa — it creates drift.
 
 ## Commands
 
@@ -41,4 +38,4 @@ kb brief <kb>               # compact summary (BRIEF.md)
 
 If the user names something ending in `-kb` (e.g. `emma-kb`, `hydra-kb`), it is a knowledge base — start with `kb list`.
 
-Full flag reference: `${CLAUDE_PLUGIN_ROOT}/references/commands.md`.
+Full routing rules: `${CLAUDE_PLUGIN_ROOT}/references/scoping.md`. Flag reference: `${CLAUDE_PLUGIN_ROOT}/references/commands.md`.

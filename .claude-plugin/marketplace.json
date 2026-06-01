@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "kb",
-      "description": "Agent-maintained knowledge bases — persistent, scoped, searchable, git-backed. Scoped skills (registry, info, remember, stage, recall, retrospective, dream) over a shared `kb` CLI.",
+      "description": "Agent-maintained knowledge bases — persistent, scoped, searchable, git-backed. Six skills (registry, info, remember, stage, recall, retrospective), four slash commands (/kb:bootstrap, /kb:add, /kb:status, /kb:sync), and a kb-dream agent for dry-run-first inbox consolidation, all over a shared `kb` CLI.",
       "source": "./plugins/kb",
       "version": "0.2.0"
     },

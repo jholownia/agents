@@ -40,10 +40,8 @@ Wrap-up signals that should trigger a capture pass:
 - Trivial conversation state.
 - Material already in CLAUDE.md / AGENTS.md / the project repo.
 - Material better suited to an issue or PR description.
-- User preferences about agent behaviour ("address me as X", "always answer terse") — auto-memory.
-- Short-lived project state (current task, last error) — auto-memory.
 
-Personal-life *facts* (birthdays, contacts, addresses) are KB-worthy if the user has a personal `user-kb`; if no personal KB exists, surface the gap rather than misfiling into a project KB. **Explicit user invocation overrides this heuristic** — honour the routing they chose.
+Routing across persistence layers (auto-memory vs CLAUDE.md vs KB, plus personal vs project KB selection) is in `${CLAUDE_PLUGIN_ROOT}/references/scoping.md`. **Explicit user invocation overrides any heuristic** — honour the routing they chose.
 
 ## Triage — pick high-value items only
 
@@ -67,4 +65,4 @@ If any answer is "no", skip it. If unsure on a large body of material, ask the u
 
 If the user has multiple registered KBs, ask which one (or default to the project's KB if the session's work was clearly scoped to one project).
 
-Full details: `${CLAUDE_PLUGIN_ROOT}/references/commands.md` and `${CLAUDE_PLUGIN_ROOT}/references/kb-contract.md`.
+Full details: `${CLAUDE_PLUGIN_ROOT}/references/scoping.md` (routing rules), `${CLAUDE_PLUGIN_ROOT}/references/commands.md`, `${CLAUDE_PLUGIN_ROOT}/references/kb-contract.md`.
