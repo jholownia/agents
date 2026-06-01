@@ -21,3 +21,23 @@ declaring a change done.
 
 `plugins/<name>/.claude-plugin/plugin.json:version` and the matching entry in
 `.claude-plugin/marketplace.json` move in lockstep when cutting a release.
+
+## Fresh machine setup
+
+[.claude/settings.json](.claude/settings.json) declares the `agents`
+marketplace and enables `kb@agents` + `plugin-dev@claude-plugins-official`,
+so Claude Code will offer to install both on first session in this repo.
+
+To use `kb` against the dogfooding KB, clone and register it once:
+
+```bash
+git clone git@github.com:jholownia/test-kb.git ~/Code/test-kb
+kb add test \
+  --path ~/Code/test-kb \
+  --remote git@github.com:jholownia/test-kb.git \
+  --description "Self-referential KB used to dogfood the kb plugin." \
+  --default
+```
+
+The repo's `pluginConfigs.kb.options.default_kb = "test"` then routes bare
+`kb` commands here to that KB.

@@ -1,0 +1,21 @@
+{
+  "enabledPlugins": {
+    "plugin-dev@claude-plugins-official": true,
+    "kb@agents": true
+  },
+  "extraKnownMarketplaces": {
+    "agents": {
+      "source": {
+        "source": "github",
+        "repo": "jholownia/agents"
+      }
+    }
+  },
+  "pluginConfigs": {
+    "kb": {
+      "options": {
+        "default_kb": "test"
+      }
+    }
+  }
+}
