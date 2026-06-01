@@ -26,20 +26,26 @@ Every knowledge base must contain:
 
 ### Three-layer scoping (what goes where)
 
-| Fact | Layer |
-|---|---|
-| Personal user preferences ("I prefer rebase", "I like X") | Claude's auto-memory — NOT the KB |
-| Normative workflow rules ("don't push to master") | `CLAUDE.md` / `AGENTS.md` — NOT the KB |
-| Short project/domain/codebase facts ("EMMA's nightly job runs at 02:00 UTC") | KB `notes/` via `kb remember` |
-| Decisions, runbook material, longer-form facts | KB `inbox/` via `kb stage`, consolidated by `kb-dream` into an appropriate canonical section |
-| URL pointers to read later | KB `inbox/` via `kb stage --url` |
-| Project TODOs that should survive sessions | KB `inbox/` via `kb stage --kind followup` |
+The axis is **durable fact vs ephemeral state**, not "personal vs project":
 
-Litmus test for the KB: would re-deriving the fact require meaningful work (grep, ask the user, synthesise across sources)? If yes → KB. If you could just re-ask the user trivially → auto-memory.
+| What                                                                          | Where                                                                                        |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| User preferences about agent behaviour ("address me as X", "I prefer rebase") | Claude's auto-memory                                                                         |
+| Short-lived project state (current task, last error seen)                     | Claude's auto-memory                                                                         |
+| Normative workflow rules ("don't push to master")                             | `CLAUDE.md` / `AGENTS.md`                                                                    |
+| Short durable facts — project, domain, codebase, or personal-life             | KB `notes/` via `kb remember`                                                                |
+| Decisions, runbook material, longer-form facts                                | KB `inbox/` via `kb stage`, consolidated by `kb-dream` into an appropriate canonical section |
+| URL pointers to read later                                                    | KB `inbox/` via `kb stage --url`                                                             |
+| Project TODOs that should survive sessions                                    | KB `inbox/` via `kb stage --kind followup`                                                   |
+
+Litmus test for the KB: would re-deriving the fact require meaningful work (grep, ask the user, synthesise across sources)? If yes → KB. If you could just re-ask the user trivially, or it's only relevant to the current session → auto-memory.
+
+**Personal vs project KBs**: if the user has a personal `user-kb` _and_ one or more project KBs, route by content — personal-life facts to `user-kb`, project facts to the project KB. If only a project KB is registered, prefer auto-memory for personal facts rather than misfiling.
 
 ## BRIEF.md
 
 The primary entrypoint for agents. Should contain:
+
 - Purpose and scope
 - Key areas with directory descriptions
 - Retrieval guidance
@@ -47,6 +53,7 @@ The primary entrypoint for agents. Should contain:
 ## AGENTS.md
 
 KB-local rules that agents must follow:
+
 - Stage raw material in `inbox/`
 - Treat `inbox/` as source material and `knowledge/` as synthesized output
 - Follow the KB's existing organization before inventing new categories
@@ -70,7 +77,6 @@ Produced by `kb remember "<text>" [--tags <a,b,c>]`. Stored at `notes/YYYY/MM/<t
 created_at: "2026-05-22T10:30:00+01:00"
 tags: ["emma", "domain"]
 ---
-
 EMMA's nightly job runs at 02:00 UTC via cron.
 ```
 
@@ -92,7 +98,6 @@ created_at: "2026-05-12T10:30:00+01:00"
 kind: "decision"
 source: null
 ---
-
 # Decision: Short Title
 
 Content here.
@@ -102,9 +107,9 @@ Frontmatter fields:
 
 - `created_at` — ISO timestamp.
 - `kind` — one of `decision`, `domain-fact`, `codebase-fact`, `runbook-note`, `retrospective`, `followup`, `raw-note`, or `url`.
-- `source` *(optional)* — short provenance string (e.g. `"discussion-123"`, `"external research"`).
-- `title` *(optional)* — display title.
-- `url` *(url notes only)* — the staged URL.
+- `source` _(optional)_ — short provenance string (e.g. `"discussion-123"`, `"external research"`).
+- `title` _(optional)_ — display title.
+- `url` _(url notes only)_ — the staged URL.
 
 Notes own their headings; the CLI does not prepend one.
 
@@ -118,7 +123,6 @@ created_at: "2026-05-22T10:30:00+01:00"
 kind: "url"
 url: "https://example.com/article"
 ---
-
 Optional description from the agent.
 ```
 

@@ -24,7 +24,9 @@ a one-line entry to `LOG.md` when you do.
   it as canonical. `kb stage --note|--file|--url` writes there.
 - Preserve provenance — link or name the source when you add a fact.
 - Prefer concise, durable notes over transcripts.
-- Never store secrets, credentials, tokens, or private personal data.
+- Never store secrets, credentials, tokens, or sensitive personal data
+  (SSN, financial, medical, etc.). Non-sensitive personal facts
+  (birthdays, contacts, addresses) are fine in a personal KB.
 
 ### Consolidation
 
@@ -140,16 +142,18 @@ Each entry should include:
 NOTES_README = """\
 # Notes
 
-Short, single-paragraph project / domain / codebase facts that are expensive
-to re-derive but too small to deserve a canonical page in `knowledge/`.
+Short, single-paragraph durable facts that are expensive to re-derive but
+too small to deserve a canonical page in `knowledge/`. Project, domain,
+codebase, or personal-life facts all qualify if they meet the litmus test.
 
 Examples of what belongs here:
 
-- "EMMA's nightly job runs at 02:00 UTC via cron."
+- "EMMA's nightly job runs at 02:00 UTC via cron." (project)
 - "The `analyze_meter_drift` function returns null when input has <30 days
-  of data."
+  of data." (codebase)
 - "We tried PostgreSQL JSON columns in 2024 and abandoned them — search
-  latency was 3x."
+  latency was 3x." (domain)
+- "My birthday is 15 November." (personal — fits if this is a personal KB)
 
 Format: one Markdown file per note at
 `notes/<YYYY>/<MM>/<timestamp>-<slug>.md`, with `tags:` and `created_at:`
@@ -160,8 +164,10 @@ are final, not raw material.
 
 What does NOT belong here:
 
-- Personal user preferences ("I like X", "I prefer rebase over merge") —
-  use Claude's auto-memory, not the KB.
+- User preferences about agent behaviour ("address me as bro", "I prefer
+  rebase") — use Claude's auto-memory.
+- Short-lived project state (current task, last error) — use Claude's
+  auto-memory.
 - Normative workflow rules ("don't push to master") — use CLAUDE.md or
   AGENTS.md.
 - Long-form synthesised knowledge — write to `knowledge/` via `kb-dream`.

@@ -118,8 +118,10 @@ kb remember "<text>" --kb <kb>
 - The text is the body, verbatim. Notes own their headings (none auto-prepended).
 - Falls back to the default KB if `--kb` is not given.
 - `--no-commit` to skip the auto-commit.
-- Use for **project / domain / codebase facts that are expensive to re-derive but too small for a `knowledge/` page**, e.g. "EMMA's nightly job runs at 02:00 UTC via cron."
-- Do **not** use for personal user preferences ("I prefer rebase", "I like X") — those belong in Claude's auto-memory. The KB is not the right layer.
+- Use for **durable facts that are expensive to re-derive but too small for a canonical page** — project, domain, codebase, or personal-life. Examples: "EMMA's nightly job runs at 02:00 UTC via cron"; "My birthday is 15 November".
+- Routes by the target KB's stated purpose. Project KBs hold project/domain/codebase facts; a personal `user-kb` (if registered) holds personal-life facts.
+- Do **not** use for user preferences about agent behaviour ("address me as X", "I prefer rebase") or short-lived project state — those belong in Claude's auto-memory.
+- Explicit user invocation (`/remember`, `kb remember ...`) overrides the heuristic: honour the routing the user chose.
 - `notes/` is append-only: `kb-dream` never touches it.
 
 ## recall

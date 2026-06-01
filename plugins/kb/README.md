@@ -26,17 +26,20 @@ Each skill is small and triggered by sharp language patterns (see each `SKILL.md
 
 ## Three-layer scoping
 
-The KB is *one* of three persistence layers — use the right one:
+The KB is *one* of three persistence layers. The axis is **durable fact vs ephemeral state**, not "personal vs project":
 
-| Fact | Layer |
+| What | Where |
 |---|---|
-| Personal user preferences ("I prefer rebase") | Claude's auto-memory — NOT the KB |
-| Normative workflow rules ("don't push to master") | CLAUDE.md / AGENTS.md — NOT the KB |
-| Short project / domain / codebase facts | KB `notes/` via `kb remember` |
+| User preferences about agent behaviour ("address me as bro", "I prefer rebase") | Claude's auto-memory |
+| Short-lived project state (current task, last error seen) | Claude's auto-memory |
+| Normative workflow rules ("don't push to master") | CLAUDE.md / AGENTS.md |
+| Durable facts — project, domain, codebase, **or personal-life** | KB `notes/` via `kb remember` |
 | Decisions, runbook material, longer-form facts | KB `inbox/` → canonical pages via `kb stage` + `kb-dream` |
 | URL pointers to read later | KB `inbox/` via `kb stage --url` |
 
-**Litmus test:** would re-deriving this fact require meaningful work? Yes → KB. Trivial to re-ask → auto-memory.
+**Litmus test:** would re-deriving this fact require meaningful work? Yes → KB. Trivial to re-ask, or only relevant to the current session → auto-memory.
+
+Personal-life facts (birthdays, contacts, addresses, family info) qualify by the litmus test. If you want them in a KB, register a `user-kb` and let durable personal data land there. Project KBs should not hold personal data.
 
 ## Quick start
 

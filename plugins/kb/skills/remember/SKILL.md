@@ -1,10 +1,10 @@
 ---
 name: remember
 description: >
-  Save a short project/domain/codebase fact that's expensive to
+  Save a short durable project/domain/codebase fact that's expensive to
   re-derive but too small for a knowledge/ page. Triggers: "remember
-  that <project fact>", "note that <project fact>". NOT for personal
-  preferences (auto-memory) or workflow rules (CLAUDE.md).
+  that <project fact>", "note that <project fact>". Routes by the target KB's stated
+  purpose and content, or the user's explicit choice if given.
 ---
 
 # kb:remember
@@ -24,7 +24,7 @@ If you're stating a single fact you'd want to look up later by tag or substring 
 
 | Fact | Layer |
 |---|---|
-| Personal user preferences | Claude's auto-memory — NOT the KB |
+| Ephemeral user preferences | Claude's auto-memory — NOT the KB |
 | Normative workflow rules | CLAUDE.md / AGENTS.md — NOT the KB |
 | **Short project / domain / codebase facts** | **`kb remember`** (this skill) → KB `notes/` |
 | Longer-form decisions / runbook material | `kb stage` → KB `inbox/` |
@@ -33,9 +33,9 @@ If you're stating a single fact you'd want to look up later by tag or substring 
 
 Good examples:
 
-- "EMMA's nightly job runs at 02:00 UTC via cron."
-- "The `analyze_meter_drift` function returns null when input has <30 days."
+- "The nightly job runs at 02:00 UTC via cron."
 - "We abandoned PostgreSQL JSON columns in 2024 — search latency was 3x."
+- "We should look into <library name> library next time we work on X feature."
 
 ## Command
 

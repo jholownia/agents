@@ -44,7 +44,10 @@ Wrap-up signals that should trigger a capture pass:
 - Trivial conversation state.
 - Material already in CLAUDE.md / AGENTS.md / the project repo.
 - Material better suited to an issue or PR description.
-- Personal user preferences — those go to auto-memory.
+- User preferences about agent behaviour ("address me as X", "always answer terse") — auto-memory.
+- Short-lived project state (current task, last error) — auto-memory.
+
+Personal-life *facts* (birthdays, contacts, addresses) are KB-worthy if the user has a personal `user-kb`; if no personal KB exists, surface the gap rather than misfiling into a project KB. **Explicit user invocation overrides this heuristic** — honour the routing they chose.
 
 ## Triage — pick high-value items only
 
