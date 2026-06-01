@@ -20,7 +20,7 @@ Provides seven scoped skills over a shared `kb` CLI:
 | `kb:stage` | stage notes / files / URL pointers / follow-ups into `inbox/` |
 | `kb:recall` | search indexable KB sections, list pending inbox material |
 | `kb:retrospective` | end-of-session capture of expensive-to-derive knowledge |
-| `kb:dream` | consolidate `inbox/` into canonical pages, dry-run-first |
+| `kb-dream` *(agent)* | consolidate `inbox/` into canonical pages, dry-run-first |
 
 Each skill is small and triggered by sharp language patterns (see each `SKILL.md`'s `description:`).
 

@@ -1,10 +1,7 @@
 ---
 name: remember
-description: >
-  Save a short durable project/domain/codebase fact that's expensive to
-  re-derive but too small for a knowledge/ page. Triggers: "remember
-  that <project fact>", "note that <project fact>". Routes by the target KB's stated
-  purpose and content, or the user's explicit choice if given.
+description: This skill should be used when the user asks to "remember that X", "note that X", or wants to save a short durable one-sentence fact (project, domain, codebase, or personal-life) to a KB. Routes by the target KB's stated purpose — project KBs hold project facts, a personal user-kb holds personal-life facts. Explicit invocation overrides the heuristic. Ephemeral user preferences and short-lived project state belong in auto-memory; normative workflow rules belong in CLAUDE.md/AGENTS.md.
+version: 0.2.0
 ---
 
 # kb:remember

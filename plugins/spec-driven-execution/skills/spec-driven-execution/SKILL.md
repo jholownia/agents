@@ -1,12 +1,7 @@
 ---
 name: spec-driven-execution
-description: >
-  Spec-driven execution model for non-trivial tasks that benefit from durable,
-  explicit planning, design, and validation steps. Each change is captured in a
-  self-contained folder with a mini-spec (description + validation + tasks)
-  written before any code; archived folders double as the decision record. Use
-  for architectural changes, cross-module refactors, GitHub issues with subtasks,
-  or any work with significant scope and complexity.
+description: This skill should be used when the user asks to "start a spec", "create a spec for X", "set up a spec folder", "plan this properly before coding", "break this work into changes", "archive this spec", "what's in active changes", or works on non-trivial tasks (architectural changes, cross-module refactors, GitHub issues with subtasks, work that spans multiple sessions) that benefit from durable explicit planning, design, and validation steps. Each change is captured in a self-contained folder with a mini-spec (description + validation + tasks) written before any code; archived folders double as the decision record. Skip for single-commit work or focused bug fixes.
+version: 0.1.0
 ---
 
 # Spec-Driven Execution

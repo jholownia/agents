@@ -1,11 +1,7 @@
 ---
 name: recall
-description: >
-  Retrieve facts, decisions, or knowledge from a registered KB, or
-  list what's still pending consolidation. Triggers: "what did we
-  decide about X", "what do we know about Y", "last session we
-  discussed Z", "what's pending in <kb>", "what's in <kb>'s inbox",
-  "show me the dream log".
+description: This skill should be used when the user asks "what did we decide about X", "what do we know about Y", "last session we discussed Z", "what's pending in <kb>", "what's in <kb>'s inbox", "show me the dream log", or wants to retrieve facts, decisions, or knowledge from a registered KB. Consults index.json (built by kb reindex) before falling back to body grep.
+version: 0.2.0
 ---
 
 # kb:recall

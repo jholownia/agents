@@ -1,11 +1,7 @@
 ---
 name: stage
-description: >
-  Stage longer notes, text files, URL pointers, or follow-up TODOs
-  into a KB's inbox/ for the next kb-dream pass. Triggers: "add/
-  document/save/write this up in <kb>", "save this article/URL to
-  <kb>", "stash this for the next dream", "remind me next session
-  about <topic>". For short single-sentence facts use kb:remember.
+description: This skill should be used when the user asks to "add/document/save/write this up in <kb>", "save this article/URL to <kb>", "stash this for the next dream", "remind me next session about <topic>", "ingest these sources into <kb>", or wants to stage longer notes, text files, URL pointers, directories of files, or follow-up TODOs into a KB's inbox for the next kb-dream pass. For short single-sentence facts use kb:remember.
+version: 0.2.0
 ---
 
 # kb:stage

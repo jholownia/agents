@@ -1,11 +1,7 @@
 ---
 name: info
-description: >
-  Quick orientation in a session that might touch a KB. Lists
-  registered KBs, reads their compact briefs, and explains how to use
-  the KB. Carries the three-layer scoping rules (auto-memory vs
-  CLAUDE.md vs KB). Triggers: "what KBs do I have", "brief me on <kb>",
-  "list KBs", "how do I use the KB", any reference to a *-kb name.
+description: This skill should be used when the user asks "what KBs do I have", "brief me on <kb>", "list KBs", "how do I use the KB", references a *-kb name, or needs quick orientation in a session that touches a KB. Lists registered KBs, reads their compact briefs, and carries the three-layer scoping rules (durable facts → KB; user preferences and ephemeral state → auto-memory; workflow rules → CLAUDE.md/AGENTS.md).
+version: 0.2.0
 ---
 
 # kb:info

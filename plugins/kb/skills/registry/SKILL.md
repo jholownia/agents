@@ -1,10 +1,7 @@
 ---
 name: registry
-description: >
-  Register, remove, bootstrap, or sync a knowledge base, and check its
-  git/contract status. Triggers: "add/register a KB", "remove the <kb>",
-  "bootstrap a KB", "sync <kb>", "kb status". Not for querying KB
-  contents — use kb:recall.
+description: This skill should be used when the user asks to "register a KB", "add a KB", "remove a KB", "bootstrap a KB", "sync a KB", "check KB status", or wants to manage the lifecycle of a knowledge base (creation, registration, syncing, removal, contract checks). Not for querying KB contents — use kb:recall.
+version: 0.2.0
 ---
 
 # kb:registry

@@ -1,11 +1,7 @@
 ---
 name: retrospective
-description: >
-  Save expensive-to-derive knowledge from the current session into a KB
-  — research findings, debugging gotchas, workflow pitfalls, specs/plans
-  to continue. Use on explicit request ("session retrospective", "save
-  what we learned") OR auto-trigger when significant session-acquired
-  knowledge would otherwise be lost on session end.
+description: This skill should be used when the user asks "save what we learned", "session retrospective", "capture session findings", "stash what we figured out", or trigger proactively when significant session-acquired knowledge (research findings, debugging gotchas, workflow pitfalls, specs/plans worth continuing) would otherwise be lost on session end. Batches end-of-session captures rather than firing on each finding.
+version: 0.2.0
 ---
 
 # kb:retrospective

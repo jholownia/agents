@@ -858,25 +858,54 @@ run "remember SKILL.md exists" test -f plugins/kb/skills/remember/SKILL.md
 run "stage SKILL.md exists" test -f plugins/kb/skills/stage/SKILL.md
 run "recall SKILL.md exists" test -f plugins/kb/skills/recall/SKILL.md
 run "retrospective SKILL.md exists" test -f plugins/kb/skills/retrospective/SKILL.md
-run "dream SKILL.md exists" test -f plugins/kb/skills/dream/SKILL.md
+run "kb-dream agent exists" test -f plugins/kb/agents/kb-dream.md
+run "bootstrap command exists" test -f plugins/kb/commands/bootstrap.md
+run "add command exists" test -f plugins/kb/commands/add.md
+run "status command exists" test -f plugins/kb/commands/status.md
+run "sync command exists" test -f plugins/kb/commands/sync.md
 run "shared references/ exists" test -d plugins/kb/references
+# Every command file carries description + allowed-tools frontmatter.
+for cmd in bootstrap add status sync; do
+    CMD="plugins/kb/commands/$cmd.md"
+    if head -10 "$CMD" | grep -q "^description:" \
+       && head -10 "$CMD" | grep -q "^allowed-tools:"; then
+        PASS=$((PASS+1))
+        echo "  PASS  $cmd command frontmatter"
+    else
+        FAIL=$((FAIL+1))
+        echo "  FAIL  $cmd command frontmatter (description/allowed-tools)"
+    fi
+done
 run "plugin.json valid JSON" python3 -c "import json; json.load(open('plugins/kb/.claude-plugin/plugin.json'))"
 run "marketplace registered as kb" python3 -c "
 import json
 d = json.load(open('.claude-plugin/marketplace.json'))
 assert any(p['name'] == 'kb' for p in d['plugins'])
 "
-# Each skill SKILL.md must have YAML frontmatter with name and description.
-for skill in registry info remember stage recall retrospective dream; do
+# Each skill SKILL.md must have third-person frontmatter (Anthropic template).
+for skill in registry info remember stage recall retrospective; do
     SKILL="plugins/kb/skills/$skill/SKILL.md"
-    if head -10 "$SKILL" | grep -q "^name: $skill$" && head -10 "$SKILL" | grep -q "^description:"; then
+    if head -10 "$SKILL" | grep -q "^name: $skill$" \
+       && head -10 "$SKILL" | grep -q "^description: This skill should be used when" \
+       && head -10 "$SKILL" | grep -q "^version:"; then
         PASS=$((PASS+1))
-        echo "  PASS  $skill SKILL.md frontmatter"
+        echo "  PASS  $skill SKILL.md frontmatter (name, description template, version)"
     else
         FAIL=$((FAIL+1))
-        echo "  FAIL  $skill SKILL.md frontmatter (name: $skill or description: missing)"
+        echo "  FAIL  $skill SKILL.md frontmatter (expects name/description-template/version)"
     fi
 done
+# kb-dream agent frontmatter check.
+AGENT="plugins/kb/agents/kb-dream.md"
+if head -5 "$AGENT" | grep -q "^name: kb-dream$" \
+   && head -40 "$AGENT" | grep -q "^description:" \
+   && head -40 "$AGENT" | grep -q "Use this agent when"; then
+    PASS=$((PASS+1))
+    echo "  PASS  kb-dream agent frontmatter"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  kb-dream agent frontmatter"
+fi
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
