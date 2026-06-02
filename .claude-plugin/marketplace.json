@@ -11,13 +11,13 @@
       "name": "kb",
       "description": "Agent-maintained knowledge bases — persistent, scoped, searchable, git-backed. Six skills (registry, info, remember, stage, recall, retrospective), four slash commands (/kb:bootstrap, /kb:add, /kb:status, /kb:sync), and a kb-dream agent for dry-run-first inbox consolidation, all over a shared `kb` CLI.",
       "source": "./plugins/kb",
-      "version": "0.2.0"
+      "version": "0.3.0"
     },
     {
       "name": "spec-driven-execution",
       "description": "Spec-driven execution model for non-trivial tasks that benefit from durable, explicit planning, design, and validation steps. Each change is captured in a self-contained folder with a mini-spec (description + validation + tasks) written before any code; archived folders double as the decision record.",
       "source": "./plugins/spec-driven-execution",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }
