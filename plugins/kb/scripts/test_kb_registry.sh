@@ -312,6 +312,31 @@ assert len(d.get('sources_kept', [])) == 1, d
         FAIL=$((FAIL+1))
         echo "  FAIL  --dir --keep-source did not copy source (out: $OUT)"
     fi
+
+    # Duplicate source basenames from different directories must not collide
+    # under sources/YYYY/MM/.
+    DUP_DIR="$TMPDIR/extract-duplicates"
+    mkdir -p "$DUP_DIR/a" "$DUP_DIR/b"
+    cat > "$DUP_DIR/a/duplicate.html" <<'HTML'
+<html><body><h1>Duplicate A</h1></body></html>
+HTML
+    cat > "$DUP_DIR/b/duplicate.html" <<'HTML'
+<html><body><h1>Duplicate B</h1></body></html>
+HTML
+    OUT=$($KB --config "$CONFIG" stage test --dir "$DUP_DIR" --keep-source --json 2>&1)
+    if echo "$OUT" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+kept = d.get('sources_kept', [])
+assert len(kept) == 2, d
+assert len(set(kept)) == 2, d
+"; then
+        PASS=$((PASS+1))
+        echo "  PASS  --dir --keep-source avoids duplicate source names"
+    else
+        FAIL=$((FAIL+1))
+        echo "  FAIL  duplicate source names collided (out: $OUT)"
+    fi
 else
     echo "  SKIP  markitdown not installed; extraction tests not run on this host"
 fi

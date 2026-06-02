@@ -6,7 +6,7 @@ version: 0.2.0
 
 # kb:stage
 
-Stages material into a KB's `inbox/` for the next `kb-dream` consolidation pass. Three shapes — choose by content type.
+Stages material into a KB's `inbox/` for the next `kb-dream` consolidation pass. Choose the staging shape by content type.
 
 ## Which verb?
 

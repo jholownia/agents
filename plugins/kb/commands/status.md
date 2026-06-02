@@ -1,7 +1,7 @@
 ---
 description: Show registration, git state, and contract status for one or all KBs.
-argument-hint: [<kb>] [--all] [--fetch]
-allowed-tools: ["Bash(kb:*)"]
+argument-hint: "[<kb>] [--all] [--fetch]"
+allowed-tools: Bash(kb:*)
 ---
 
 # KB status

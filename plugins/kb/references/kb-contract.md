@@ -112,13 +112,15 @@ url: "https://example.com/article"
 Optional description from the agent.
 ```
 
-### Documents (verbatim, unstructured)
+### Documents and extracted files
 
-Produced by `kb stage --file <path>` or by manually dropping a Markdown file into `inbox/`. No frontmatter, no auto-heading — the file is what it is. Provenance lives in the git commit message (`kb: stage document <basename>`).
+Text documents are produced by `kb stage --file <path>` or by manually dropping a Markdown file into `inbox/`. No frontmatter, no auto-heading — the file is what it is. Provenance lives in the git commit message (`kb: stage document <basename>`).
+
+Extractable formats (`.pdf`, `.docx`, `.pptx`, `.xlsx`, `.epub`, `.html`) are converted to Markdown via `markitdown` when available. These extracted inbox files do carry provenance frontmatter (`kind: extracted`, `extracted_from`, `extractor`, optional `source` when `--keep-source` copies the original under `sources/`).
 
 ### Filenames
 
-Both shapes are stored at `inbox/YYYY/MM/YYYYMMDD-HHMMSS-<slug>.md`. The slug is derived from `--title`/content for notes and from the source filename for documents.
+Staged material is stored at `inbox/YYYY/MM/YYYYMMDD-HHMMSS-<slug>.md`. The slug is derived from `--title`/content for notes and from the source filename for documents.
 
 ## Optional frontmatter conventions (canonical pages only)
 

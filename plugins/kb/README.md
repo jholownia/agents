@@ -127,7 +127,7 @@ These are real gaps the subagent dogfood pass surfaced; deferred to v0.1+:
 - **Mutation of existing notes beyond deletion** — `kb forget` removes a page from the working surface, but there is no CLI verb for "edit this note's text" or "retag this page". Workaround: edit the file/frontmatter directly and commit.
 - **Re-tagging existing notes** — same: edit frontmatter directly. Tag mutations are append-only-from-the-CLI today.
 - **Dream-history queries beyond `kb open <kb> LOG.md`** — there's no CLI verb to filter LOG entries by date, kind, or supersession. `kb open` is sufficient for v0.
-- **Documents staged via `--file` cannot carry kind/title/source metadata** — by design (documents have no frontmatter), but means a longer retrospective file has to be staged via `--note "$(cat file.md)"` to get the `kind: retrospective` label.
+- **Text documents staged via `--file` cannot carry user-supplied kind/title/source metadata** — by design, verbatim documents have no frontmatter. Extracted files carry automatic provenance frontmatter. A longer retrospective file still has to be staged via `--note "$(cat file.md)"` to get `kind: retrospective`.
 - **`bin/kb` PATH injection** depends on the plugin being installed via Claude Code. Local development uses `plugins/kb/bin/kb` explicitly.
 
 Resolved in v0.2 (originally listed here):

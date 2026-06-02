@@ -180,7 +180,7 @@ INBOX_README = """\
 Staging area for raw or uncertain material, awaiting consolidation into
 `knowledge/`.
 
-Three shapes of material live here:
+Common shapes of material live here:
 
 - **Notes** — agent-written, semi-structured. Produced by
   `kb stage --note ...`. YAML frontmatter at top (`kind`, `created_at`,
@@ -189,6 +189,11 @@ Three shapes of material live here:
   `kb stage --file <path>` or by dropping a Markdown file directly into
   this directory. No frontmatter, no auto-heading. Provenance lives in
   the git commit message.
+- **Extracted documents** — PDFs, Office files, EPUB, and HTML converted
+  to Markdown by `markitdown`. Produced by `kb stage --file <path>` or
+  `kb stage --dir <path>` for extractable formats. Frontmatter carries
+  `kind: extracted`, `extracted_from`, `extractor`, and optional `source`
+  when `--keep-source` copied the original under `sources/`.
 - **URL pointers** — produced by `kb stage --url <url>`. Frontmatter has
   `kind: url` and `url: <url>`; the next `kb-dream` pass fetches and
   summarises the link.

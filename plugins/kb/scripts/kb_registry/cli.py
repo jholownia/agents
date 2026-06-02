@@ -1184,6 +1184,22 @@ def _extract_to_markdown(abs_src):
     return True, r.stdout, ""
 
 
+def _unique_rel_path(kb_path, rel_path):
+    """Return rel_path or a numbered variant that does not already exist.
+
+    Used for optional source copies: different source directories can contain
+    files with the same basename, but their provenance entries must not point
+    at an overwritten artifact.
+    """
+    base, ext = os.path.splitext(rel_path)
+    candidate = rel_path
+    i = 1
+    while os.path.exists(os.path.join(kb_path, candidate)):
+        candidate = f"{base}-{i:03d}{ext}"
+        i += 1
+    return candidate
+
+
 def _iter_dir_documents(root, force):
     """Walk a source tree and yield (abs_path, status) for every file.
 
@@ -1246,7 +1262,7 @@ def _cmd_stage_dir(args, config, kb, kb_path):
     if args.kind or args.title or args.source or args.note:
         print(
             "Note: --kind/--title/--source/--note are ignored for --dir "
-            "(documents have no frontmatter).",
+            "(directory staging derives provenance per file).",
             file=sys.stderr,
         )
 
@@ -1318,7 +1334,9 @@ def _cmd_stage_dir(args, config, kb, kb_path):
                 source_rel = None
                 if keep_source:
                     src_basename = os.path.basename(abs_src)
-                    source_rel = os.path.join(sources_dir, src_basename)
+                    source_rel = _unique_rel_path(
+                        kb_path, os.path.join(sources_dir, src_basename)
+                    )
                     source_full = os.path.join(kb_path, source_rel)
                     os.makedirs(os.path.dirname(source_full), exist_ok=True)
                     import shutil as _shutil
@@ -1493,7 +1511,8 @@ def cmd_stage(args, config, config_path):
         slug_source = os.path.splitext(os.path.basename(src))[0]
         if args.kind or args.title or args.source:
             print("Note: --kind/--title/--source are ignored for --file "
-                  "(documents have no frontmatter).", file=sys.stderr)
+                  "(file staging derives provenance from the file).",
+                  file=sys.stderr)
     elif is_url:
         # Body is the optional --note description; may be empty.
         content = args.note if args.note else ""
@@ -1548,7 +1567,9 @@ def cmd_stage(args, config, config_path):
             # copy the original to sources/ if --keep-source.
             if keep_source:
                 src_basename = os.path.basename(src)
-                source_rel = os.path.join("sources", date_dir, src_basename)
+                source_rel = _unique_rel_path(
+                    kb_path, os.path.join("sources", date_dir, src_basename)
+                )
                 source_full = os.path.join(kb_path, source_rel)
                 os.makedirs(os.path.dirname(source_full), exist_ok=True)
                 import shutil as _shutil

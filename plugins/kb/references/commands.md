@@ -234,7 +234,7 @@ Mode is determined by which flag is set. `--dir` is mutually exclusive with `--n
 - **Skipped**: hidden files/dirs, common SCM/build dirs (`.git`, `node_modules`, `__pycache__`, `dist`, `build`, `venv`, `target`, `out`, `.tox`), binary text-extension files (null bytes in first 8 KB), empty files, and oversized text files (> 1 MB unless `--force`). Extractable formats bypass binary + size checks — the source byte count doesn't matter, the extracted text does.
 - **Without `markitdown` installed**: extractable formats land in a separate `extractor_missing` skip category with a one-line install hint (`pip install markitdown`); surrounding text formats still ingest normally.
 - All files land under a single `inbox/YYYY/MM/<timestamp>-NNN-<slug>.md` prefix and are committed together: `kb: stage directory <basename> (N files[, +K source])`.
-- `--kind`, `--title`, `--source`, `--note` are ignored for `--dir` (documents have no frontmatter); a warning is printed if set.
+- `--kind`, `--title`, `--source`, `--note` are ignored for `--dir`; extracted files carry their own provenance frontmatter, while text files are copied verbatim. A warning is printed if these flags are set.
 - JSON output enumerates `staged`, `extracted`, `sources_kept`, and per-category `skipped` so the agent can decide whether to re-run with `--force`, `--keep-source`, or stage misses individually via `--file`.
 - Typical use: "set up a KB from this project's sources" → `kb bootstrap <name> --path ...` then `kb stage <name> --dir ~/Documents/project-foo/`, then a `kb-dream` pass to consolidate.
 
@@ -273,7 +273,7 @@ source: "sources/2026/06/foo.pdf"     # only present when --keep-source was set
 ### Common
 
 - Writes to `inbox/YYYY/MM/` with a timestamp-prefixed filename.
-- Rejects binary files; warns on files over 1 MB (`--force` to override).
+- Rejects unsupported binary files; extractable formats are converted via `markitdown`. Text files over 1 MB warn and require `--force`.
 - Does **not** scan content for secrets. Treat "no secrets in the KB" as agent guidance.
 - Auto-commits by default (`--no-commit` to skip).
 
