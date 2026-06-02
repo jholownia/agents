@@ -19,8 +19,21 @@ declaring a change done.
 
 ## Versioning
 
+Bump the plugin version on any commit that changes user-visible surface:
+skills, commands, agents, CLI behavior, error messages, or the descriptions
+shown in the slash-command menu. Tests-only, refactor-only, or repo-meta
+changes don't need a bump.
+
 `plugins/<name>/.claude-plugin/plugin.json:version` and the matching entry in
-`.claude-plugin/marketplace.json` move in lockstep when cutting a release.
+`.claude-plugin/marketplace.json` move in lockstep. Add a CHANGELOG entry to
+the plugin's `CHANGELOG.md` for every bump.
+
+**Why this matters:** Claude Code caches each installed plugin under
+`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/` and serves slash
+commands, skills, and agents from that snapshot — NOT from the live source
+tree. The marketplace update check compares the declared `version` against
+the cached version; if equal, no refetch. So an unbumped commit ships
+silently from the dev tree but never reaches anyone's runtime.
 
 ## Fresh machine setup
 
