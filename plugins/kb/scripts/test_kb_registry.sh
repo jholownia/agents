@@ -208,6 +208,115 @@ run_fail 2 "--dir + --note rejected" $KB --config "$CONFIG" stage test --dir "$D
 run_fail 2 "--dir nonexistent path rejected" $KB --config "$CONFIG" stage test --dir "$TMPDIR/does-not-exist"
 
 echo ""
+echo "--- 5b. Stage extraction (markitdown) ---"
+# Only run extraction tests when markitdown is available; otherwise verify the
+# graceful fallback paths.
+HAS_MARKITDOWN=0
+if command -v markitdown >/dev/null 2>&1; then HAS_MARKITDOWN=1; fi
+
+if [ "$HAS_MARKITDOWN" = "1" ]; then
+    # --file with .html → extracted markdown + provenance frontmatter, no source kept.
+    EXTRACT_SRC="$TMPDIR/source.html"
+    cat > "$EXTRACT_SRC" <<'HTML'
+<html><body><h1>Sample</h1><p>Body of the document.</p></body></html>
+HTML
+    OUT=$($KB --config "$CONFIG" stage test --file "$EXTRACT_SRC" --json 2>&1)
+    if echo "$OUT" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d.get('mode') == 'extracted', d
+assert d.get('extractor') == 'markitdown', d
+assert d.get('extracted_from'), d
+assert 'source' not in d, ('default should not keep source', d)
+"; then
+        PASS=$((PASS+1))
+        echo "  PASS  --file extractable converts via markitdown"
+    else
+        FAIL=$((FAIL+1))
+        echo "  FAIL  --file extractable mode wrong (out: $OUT)"
+    fi
+
+    EXTRACTED=$(echo "$OUT" | python3 -c "import json,sys; print(json.loads(sys.stdin.read())['path'])")
+    if head -10 "$TEST_KB/$EXTRACTED" | grep -q '^kind: "extracted"$' \
+       && head -10 "$TEST_KB/$EXTRACTED" | grep -q 'extracted_from:' \
+       && grep -q '# Sample' "$TEST_KB/$EXTRACTED"; then
+        PASS=$((PASS+1))
+        echo "  PASS  extracted file carries provenance frontmatter + content"
+    else
+        FAIL=$((FAIL+1))
+        echo "  FAIL  extracted frontmatter/content malformed (file=$EXTRACTED)"
+    fi
+
+    # Default does NOT copy source to sources/.
+    if [ ! -d "$TEST_KB/sources/2026" ] || ! find "$TEST_KB/sources" -name "*.html" 2>/dev/null | grep -q .; then
+        PASS=$((PASS+1))
+        echo "  PASS  default extraction does not copy source binary"
+    else
+        FAIL=$((FAIL+1))
+        echo "  FAIL  source unexpectedly copied to sources/"
+    fi
+
+    # --keep-source copies original to sources/ and adds source: frontmatter.
+    KEEP_SRC="$TMPDIR/keep-me.html"
+    cat > "$KEEP_SRC" <<'HTML'
+<html><body><h1>Keep</h1><p>this one</p></body></html>
+HTML
+    OUT=$($KB --config "$CONFIG" stage test --file "$KEEP_SRC" --keep-source --json 2>&1)
+    if echo "$OUT" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d.get('source', '').startswith('sources/'), d
+" && find "$TEST_KB/sources" -name "keep-me.html" 2>/dev/null | grep -q .; then
+        PASS=$((PASS+1))
+        echo "  PASS  --keep-source copies original to sources/"
+    else
+        FAIL=$((FAIL+1))
+        echo "  FAIL  --keep-source did not copy source (out: $OUT)"
+    fi
+
+    # --dir picks up an extractable file and counts it under 'extracted'.
+    EXTRACT_DIR="$TMPDIR/extract-tree"
+    mkdir -p "$EXTRACT_DIR"
+    cat > "$EXTRACT_DIR/note.md" <<'MD'
+# Plain
+plain note
+MD
+    cat > "$EXTRACT_DIR/doc.html" <<'HTML'
+<html><body><h1>HTML in tree</h1><p>extracted via dir walk</p></body></html>
+HTML
+    OUT=$($KB --config "$CONFIG" stage test --dir "$EXTRACT_DIR" --json 2>&1)
+    if echo "$OUT" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert len(d.get('staged', [])) == 2, d
+assert len(d.get('extracted', [])) == 1, d
+assert d.get('sources_kept', []) == [], d
+"; then
+        PASS=$((PASS+1))
+        echo "  PASS  --dir extracts .html, leaves .md verbatim"
+    else
+        FAIL=$((FAIL+1))
+        echo "  FAIL  --dir extract counts wrong (out: $OUT)"
+    fi
+
+    # --dir + --keep-source copies sources alongside extractions.
+    OUT=$($KB --config "$CONFIG" stage test --dir "$EXTRACT_DIR" --keep-source --json 2>&1)
+    if echo "$OUT" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert len(d.get('sources_kept', [])) == 1, d
+"; then
+        PASS=$((PASS+1))
+        echo "  PASS  --dir --keep-source copies the html source"
+    else
+        FAIL=$((FAIL+1))
+        echo "  FAIL  --dir --keep-source did not copy source (out: $OUT)"
+    fi
+else
+    echo "  SKIP  markitdown not installed; extraction tests not run on this host"
+fi
+
+echo ""
 echo "--- 6. Safety ---"
 # v0 no longer scans content for secrets — credentials-discussing docs must stage cleanly.
 run "credential-discussing doc stages cleanly" $KB --config "$CONFIG" stage test --note "examples include password=hunter2 and AKIA1234567890ABCDEF"

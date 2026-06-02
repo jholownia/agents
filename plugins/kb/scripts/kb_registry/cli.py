@@ -1134,12 +1134,17 @@ def cmd_search(args, config, config_path):
     return EXIT_OK
 
 
-# Text extensions recognised by `--dir` bulk staging. The single-file
-# `--file` path is permissive (any text file passes check_binary); `--dir`
-# is stricter to avoid sweeping in random .json/.lock files from a source
-# tree. Agents can fall back to --file for one-off oddities.
+# Text extensions copied verbatim into inbox.
 DIR_TEXT_EXTENSIONS = frozenset({
     ".md", ".markdown", ".txt", ".org", ".rst",
+})
+# Formats `markitdown` can convert to Markdown. Bypass the binary-content
+# and size checks for these — a 100 MB book is normal input; what matters
+# is the *extracted* text, not the source byte size. The original binary
+# is only kept when --keep-source is set; default behaviour is "extract
+# the text, drop the binary."
+DIR_EXTRACTABLE_EXTENSIONS = frozenset({
+    ".pdf", ".docx", ".pptx", ".xlsx", ".epub", ".html", ".htm",
 })
 # Directories we always skip when walking a source tree via `--dir`. Plus
 # anything starting with a dot.
@@ -1148,17 +1153,50 @@ DIR_SKIP_NAMES = frozenset({
     "target", "out", ".tox",
 })
 
+MARKITDOWN_BIN = "markitdown"
+
+
+def _markitdown_available():
+    import shutil
+    return shutil.which(MARKITDOWN_BIN) is not None
+
+
+def _extract_to_markdown(abs_src):
+    """Run markitdown on abs_src and return (ok, text, error_msg).
+
+    On success: (True, markdown_text, ""). On failure: (False, "", reason).
+    Caller is responsible for checking _markitdown_available() upstream.
+    """
+    import subprocess
+    try:
+        r = subprocess.run(
+            [MARKITDOWN_BIN, abs_src],
+            capture_output=True, text=True, check=False,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "", "markitdown timed out after 120s"
+    except OSError as exc:
+        return False, "", f"could not invoke markitdown: {exc}"
+    if r.returncode != 0:
+        msg = (r.stderr or r.stdout or "unknown error").strip()
+        return False, "", f"markitdown exit {r.returncode}: {msg[:200]}"
+    return True, r.stdout, ""
+
 
 def _iter_dir_documents(root, force):
     """Walk a source tree and yield (abs_path, status) for every file.
 
     status:
-      ok        — text file ready to stage
-      binary    — has null bytes; skipped
-      large     — over 1 MB and --force not set; skipped
-      empty     — zero bytes; skipped
-      extension — unrecognised extension; skipped
+      ok                — text file ready to stage verbatim
+      extract           — extractable format (markitdown handles it)
+      extractor_missing — extractable format but markitdown not installed
+      binary            — has null bytes; skipped (only applies to text exts)
+      large             — over 1 MB and --force not set; skipped (text only)
+      empty             — zero bytes; skipped
+      extension         — unrecognised extension; skipped
     """
+    have_extractor = _markitdown_available()
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(
             d for d in dirnames
@@ -1169,15 +1207,21 @@ def _iter_dir_documents(root, force):
                 continue
             abs_path = os.path.join(dirpath, fn)
             ext = os.path.splitext(fn)[1].lower()
-            if ext not in DIR_TEXT_EXTENSIONS:
-                yield abs_path, "extension"
-                continue
             try:
                 size = os.path.getsize(abs_path)
             except OSError:
                 continue
             if size == 0:
                 yield abs_path, "empty"
+                continue
+            if ext in DIR_EXTRACTABLE_EXTENSIONS:
+                if have_extractor:
+                    yield abs_path, "extract"
+                else:
+                    yield abs_path, "extractor_missing"
+                continue
+            if ext not in DIR_TEXT_EXTENSIONS:
+                yield abs_path, "extension"
                 continue
             if check_binary(abs_path):
                 yield abs_path, "binary"
@@ -1206,25 +1250,34 @@ def _cmd_stage_dir(args, config, kb, kb_path):
             file=sys.stderr,
         )
 
+    keep_source = bool(getattr(args, "keep_source", False))
+
     with track_command(_metrics_path(config), "stage",
                        kb=kb["name"]) as ctx:
         ctx["mode"] = "dir"
         ctx["source"] = src_root
+        ctx["keep_source"] = keep_source
 
         now = datetime.now(timezone.utc).astimezone()
         date_dir = now.strftime("%Y/%m")
         timestamp_slug = now.strftime("%Y%m%d-%H%M%S")
         inbox_dir = os.path.join("inbox", date_dir)
+        sources_dir = os.path.join("sources", date_dir)
 
         staged = []
-        skipped = {"binary": [], "large": [], "empty": [], "extension": []}
+        extracted_files = []  # files written via markitdown extraction
+        source_copies = []  # original binaries copied to sources/ (if kept)
+        skipped = {
+            "binary": [], "large": [], "empty": [], "extension": [],
+            "extractor_missing": [], "extract_failed": [],
+        }
         counter = 0
         for abs_src, status in _iter_dir_documents(src_root, args.force):
-            if status != "ok":
+            if status in ("binary", "large", "empty", "extension",
+                          "extractor_missing"):
                 skipped[status].append(os.path.relpath(abs_src, src_root))
                 continue
-            # Slug from basename; counter disambiguates collisions across
-            # subdirectories within the same second.
+
             stem = os.path.splitext(os.path.basename(abs_src))[0]
             slug = _slugify(stem) or "doc"
             rel_path = os.path.join(
@@ -1239,33 +1292,82 @@ def _cmd_stage_dir(args, config, kb, kb_path):
 
             full_path = os.path.join(kb_path, rel_path)
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            try:
-                with open(abs_src, "r", errors="replace") as f:
-                    content = f.read()
-            except OSError as exc:
-                print(f"Warning: could not read {abs_src}: {exc}",
-                      file=sys.stderr)
-                continue
-            if not content.endswith("\n"):
-                content += "\n"
-            with open(full_path, "w") as f:
-                f.write(content)
-            staged.append(rel_path)
+
+            if status == "ok":
+                # Text format: copy verbatim, no frontmatter.
+                try:
+                    with open(abs_src, "r", errors="replace") as f:
+                        content = f.read()
+                except OSError as exc:
+                    print(f"Warning: could not read {abs_src}: {exc}",
+                          file=sys.stderr)
+                    continue
+                if not content.endswith("\n"):
+                    content += "\n"
+                with open(full_path, "w") as f:
+                    f.write(content)
+                staged.append(rel_path)
+            elif status == "extract":
+                ok, text, err = _extract_to_markdown(abs_src)
+                if not ok:
+                    skipped["extract_failed"].append(
+                        f"{os.path.relpath(abs_src, src_root)} ({err})"
+                    )
+                    continue
+
+                source_rel = None
+                if keep_source:
+                    src_basename = os.path.basename(abs_src)
+                    source_rel = os.path.join(sources_dir, src_basename)
+                    source_full = os.path.join(kb_path, source_rel)
+                    os.makedirs(os.path.dirname(source_full), exist_ok=True)
+                    import shutil as _shutil
+                    _shutil.copy2(abs_src, source_full)
+                    source_copies.append(source_rel)
+
+                # Frontmatter for extracted content carries provenance so
+                # kb-dream (and the user) can trace back.
+                def _yaml_str(s):
+                    return ('"' + s.replace("\\", "\\\\")
+                            .replace('"', '\\"') + '"')
+                fm_lines = ["---"]
+                fm_lines.append(f"created_at: {_yaml_str(now.isoformat())}")
+                fm_lines.append(
+                    f"extracted_from: {_yaml_str(abs_src)}"
+                )
+                fm_lines.append(f"extractor: {_yaml_str(MARKITDOWN_BIN)}")
+                fm_lines.append('kind: "extracted"')
+                if source_rel is not None:
+                    fm_lines.append(f"source: {_yaml_str(source_rel)}")
+                fm_lines.append("---")
+                fm_lines.append("")
+                body = text if text.endswith("\n") else text + "\n"
+                with open(full_path, "w") as f:
+                    f.write("\n".join(fm_lines) + body)
+                staged.append(rel_path)
+                extracted_files.append(rel_path)
 
         ctx["staged"] = len(staged)
-        ctx["skipped_binary"] = len(skipped["binary"])
-        ctx["skipped_large"] = len(skipped["large"])
-        ctx["skipped_extension"] = len(skipped["extension"])
-        ctx["skipped_empty"] = len(skipped["empty"])
+        ctx["extracted"] = len(extracted_files)
+        ctx["source_copies"] = len(source_copies)
+        for k in skipped:
+            ctx[f"skipped_{k}"] = len(skipped[k])
 
+        files_to_commit = staged + source_copies
         committed = False
-        if staged and not args.no_commit and git_is_repo(kb_path):
-            git_add_files(kb_path, staged)
+        if files_to_commit and not args.no_commit and git_is_repo(kb_path):
+            git_add_files(kb_path, files_to_commit)
+            label = os.path.basename(src_root) or src_root
             commit_msg = (
-                f"kb: stage directory {os.path.basename(src_root) or src_root}"
-                f" ({len(staged)} files)"
+                f"kb: stage directory {label} "
+                f"({len(staged)} files"
+                + (f", +{len(source_copies)} source"
+                   if source_copies else "")
+                + ")"
             )
-            ok, out, rc = git_commit_files(kb_path, commit_msg, staged)
+            ok, out, rc = git_commit_files(
+                kb_path, commit_msg, files_to_commit,
+            )
             committed = ok
             if not ok and "nothing to commit" not in out:
                 print(f"Warning: commit failed: {out}", file=sys.stderr)
@@ -1276,14 +1378,31 @@ def _cmd_stage_dir(args, config, kb, kb_path):
                 "mode": "dir",
                 "source": src_root,
                 "staged": staged,
+                "extracted": extracted_files,
+                "sources_kept": source_copies,
                 "skipped": {k: v for k, v in skipped.items() if v},
                 "committed": committed,
             }, True)
         else:
             print(f"Staged {len(staged)} file(s) from {src_root}")
+            if extracted_files:
+                print(f"  Of which {len(extracted_files)} extracted via "
+                      f"{MARKITDOWN_BIN}.")
+            if source_copies:
+                print(f"  Kept {len(source_copies)} original "
+                      f"source(s) under sources/.")
             for kind, paths in skipped.items():
-                if paths:
-                    print(f"  Skipped {len(paths)} ({kind})", file=sys.stderr)
+                if not paths:
+                    continue
+                if kind == "extractor_missing":
+                    print(
+                        f"  Skipped {len(paths)} (markitdown not installed — "
+                        f"`pip install markitdown` to ingest these).",
+                        file=sys.stderr,
+                    )
+                else:
+                    print(f"  Skipped {len(paths)} ({kind})",
+                          file=sys.stderr)
 
     return EXIT_OK
 
@@ -1337,20 +1456,40 @@ def cmd_stage(args, config, config_path):
         return EXIT_ARGS
 
     # Resolve content + slug source.
+    is_extracted_file = False
     if is_file:
         src = os.path.abspath(args.file)
         if not os.path.isfile(src):
             print(f"Error: file not found: {src}", file=sys.stderr)
             return EXIT_ARGS
-        if check_binary(src):
-            print("Error: binary files not supported.", file=sys.stderr)
-            return EXIT_ARGS
-        if check_large_file(src):
-            print("Warning: large file.", file=sys.stderr)
-            if not args.force:
+        ext = os.path.splitext(src)[1].lower()
+        if ext in DIR_EXTRACTABLE_EXTENSIONS:
+            # Extractable format (.pdf/.docx/etc.) — convert via markitdown.
+            # Bypasses binary + size checks; what matters is extracted text.
+            if not _markitdown_available():
+                print(
+                    f"Error: {ext} requires extraction but markitdown is not "
+                    f"installed. `pip install markitdown` to ingest "
+                    f".pdf/.docx/.pptx/.xlsx/.epub/.html.",
+                    file=sys.stderr,
+                )
                 return EXIT_ARGS
-        with open(src, "r") as f:
-            content = f.read()
+            ok, text, err = _extract_to_markdown(src)
+            if not ok:
+                print(f"Error: extraction failed: {err}", file=sys.stderr)
+                return EXIT_FAILURE
+            content = text
+            is_extracted_file = True
+        else:
+            if check_binary(src):
+                print("Error: binary files not supported.", file=sys.stderr)
+                return EXIT_ARGS
+            if check_large_file(src):
+                print("Warning: large file.", file=sys.stderr)
+                if not args.force:
+                    return EXIT_ARGS
+            with open(src, "r") as f:
+                content = f.read()
         slug_source = os.path.splitext(os.path.basename(src))[0]
         if args.kind or args.title or args.source:
             print("Note: --kind/--title/--source are ignored for --file "
@@ -1398,9 +1537,33 @@ def cmd_stage(args, config, config_path):
         def _yaml_str(s):
             return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
-        if is_file:
-            # Document: verbatim.
+        keep_source = bool(getattr(args, "keep_source", False))
+        source_rel = None
+
+        if is_file and not is_extracted_file:
+            # Plain document: verbatim, no frontmatter.
             staged_content = content
+        elif is_extracted_file:
+            # Extracted from binary: write provenance frontmatter, optionally
+            # copy the original to sources/ if --keep-source.
+            if keep_source:
+                src_basename = os.path.basename(src)
+                source_rel = os.path.join("sources", date_dir, src_basename)
+                source_full = os.path.join(kb_path, source_rel)
+                os.makedirs(os.path.dirname(source_full), exist_ok=True)
+                import shutil as _shutil
+                _shutil.copy2(src, source_full)
+
+            fm_lines = ["---"]
+            fm_lines.append(f"created_at: {_yaml_str(now.isoformat())}")
+            fm_lines.append(f"extracted_from: {_yaml_str(src)}")
+            fm_lines.append(f"extractor: {_yaml_str(MARKITDOWN_BIN)}")
+            fm_lines.append('kind: "extracted"')
+            if source_rel is not None:
+                fm_lines.append(f"source: {_yaml_str(source_rel)}")
+            fm_lines.append("---")
+            fm_lines.append("")
+            staged_content = "\n".join(fm_lines) + content
         else:
             # Note or URL pointer: prepend YAML frontmatter.
             frontmatter = {
@@ -1433,23 +1596,43 @@ def cmd_stage(args, config, config_path):
             f.write(staged_content)
 
         ctx["path"] = rel_path
+        if is_extracted_file:
+            ctx["extracted"] = True
+            ctx["keep_source"] = keep_source
 
-        # Auto-commit: stage only the new file, not unrelated changes
+        # Auto-commit: stage only the new file (+ optional source copy).
         committed = False
         if not args.no_commit and git_is_repo(kb_path):
-            if is_file:
+            files_to_commit = [rel_path]
+            if source_rel is not None:
+                files_to_commit.append(source_rel)
+            if is_extracted_file:
+                commit_msg = (
+                    f"kb: stage extracted {os.path.basename(src)}"
+                    + (" (+source)" if source_rel else "")
+                )
+            elif is_file:
                 commit_msg = f"kb: stage document {os.path.basename(src)}"
             elif is_url:
                 commit_msg = f"kb: stage url pointer"
             else:
                 commit_msg = f"kb: stage {kind} note"
-            git_add_files(kb_path, [rel_path])
-            ok, out, rc = git_commit_files(kb_path, commit_msg, [rel_path])
+            git_add_files(kb_path, files_to_commit)
+            ok, out, rc = git_commit_files(
+                kb_path, commit_msg, files_to_commit,
+            )
             committed = ok
             if not ok:
                 print(f"Warning: commit failed: {out}", file=sys.stderr)
 
-        mode = "document" if is_file else ("url" if is_url else "note")
+        if is_extracted_file:
+            mode = "extracted"
+        elif is_file:
+            mode = "document"
+        elif is_url:
+            mode = "url"
+        else:
+            mode = "note"
         if args.json:
             payload = {
                 "kb": kb["name"],
@@ -1461,9 +1644,19 @@ def cmd_stage(args, config, config_path):
                 payload["url"] = args.url
             if kind is not None:
                 payload["kind"] = kind
+            if is_extracted_file:
+                payload["extracted_from"] = src
+                payload["extractor"] = MARKITDOWN_BIN
+                if source_rel is not None:
+                    payload["source"] = source_rel
             _output(payload, True)
         else:
-            if is_file:
+            if is_extracted_file:
+                line = f"Staged extracted: {rel_path}"
+                if source_rel is not None:
+                    line += f"  (+ source: {source_rel})"
+                print(line)
+            elif is_file:
                 print(f"Staged document: {rel_path}")
             elif is_url:
                 print(f"Staged URL pointer: {rel_path}")
@@ -1961,14 +2154,24 @@ def build_parser():
     )
     p.add_argument("kb", nargs="?")
     p.add_argument("--note", help="Note body, or description when paired with --url.")
-    p.add_argument("--file", help="Path to a text file; staged verbatim.")
+    p.add_argument(
+        "--file",
+        help=(
+            "Path to a file. Text formats (.md/.txt/.org/.rst) staged "
+            "verbatim; extractable formats (.pdf/.docx/.pptx/.xlsx/.epub/"
+            ".html) converted via `markitdown` with provenance frontmatter."
+        ),
+    )
     p.add_argument("--url", help="URL pointer; kb-dream fetches/summarises later.")
     p.add_argument(
         "--dir",
         help=(
-            "Path to a directory of text files; bulk-stages every "
-            ".md/.txt/.org/.rst recursively, one commit at the end. "
-            "Skips binaries, oversized files, hidden/SCM dirs."
+            "Path to a directory; bulk-stages every supported file "
+            "recursively, one commit at the end. Text formats "
+            "(.md/.txt/.org/.rst) are copied verbatim; extractable formats "
+            "(.pdf/.docx/.pptx/.xlsx/.epub/.html) are converted via "
+            "`markitdown`. Skips binaries, oversized text files, hidden/SCM "
+            "dirs. Use --keep-source to also copy originals to sources/."
         ),
     )
     p.add_argument(
@@ -1981,6 +2184,15 @@ def build_parser():
     )
     p.add_argument("--title")
     p.add_argument("--source")
+    p.add_argument(
+        "--keep-source", action="store_true",
+        help=(
+            "When extracting from .pdf/.docx/etc., also copy the original "
+            "to sources/<YYYY>/<MM>/ and link via frontmatter. Default is "
+            "drop the binary after extraction to keep the KB git-friendly. "
+            "Use when the source matters (visual layout, re-extraction)."
+        ),
+    )
     p.add_argument("--no-commit", action="store_true")
     p.add_argument("--force", action="store_true")
 

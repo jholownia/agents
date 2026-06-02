@@ -229,20 +229,36 @@ Mode is determined by which flag is set. `--dir` is mutually exclusive with `--n
 ### Directory (`--dir`)
 
 - Walks a source tree recursively and bulk-stages every recognised text file as a document.
-- Recognised extensions: `.md`, `.markdown`, `.txt`, `.org`, `.rst`. Anything else is skipped (counted as `extension` in the summary).
-- Skips hidden files/dirs, common SCM/build dirs (`.git`, `node_modules`, `__pycache__`, `dist`, `build`, `venv`, `target`, `out`, `.tox`), binary files (null bytes in first 8 KB), empty files, and files over 1 MB (unless `--force`).
-- All files land under a single `inbox/YYYY/MM/<timestamp>-NNN-<slug>.md` prefix and are committed together: `kb: stage directory <basename> (N files)`.
+- **Text formats** (`.md`, `.markdown`, `.txt`, `.org`, `.rst`) — copied verbatim, no frontmatter.
+- **Extractable formats** (`.pdf`, `.docx`, `.pptx`, `.xlsx`, `.epub`, `.html`/`.htm`) — converted to Markdown via `markitdown`, written with provenance frontmatter (`extracted_from`, `extractor`, `kind: extracted`). Original binary is dropped by default. Use `--keep-source` to also copy originals to `sources/YYYY/MM/`.
+- **Skipped**: hidden files/dirs, common SCM/build dirs (`.git`, `node_modules`, `__pycache__`, `dist`, `build`, `venv`, `target`, `out`, `.tox`), binary text-extension files (null bytes in first 8 KB), empty files, and oversized text files (> 1 MB unless `--force`). Extractable formats bypass binary + size checks — the source byte count doesn't matter, the extracted text does.
+- **Without `markitdown` installed**: extractable formats land in a separate `extractor_missing` skip category with a one-line install hint (`pip install markitdown`); surrounding text formats still ingest normally.
+- All files land under a single `inbox/YYYY/MM/<timestamp>-NNN-<slug>.md` prefix and are committed together: `kb: stage directory <basename> (N files[, +K source])`.
 - `--kind`, `--title`, `--source`, `--note` are ignored for `--dir` (documents have no frontmatter); a warning is printed if set.
-- JSON output lists every staged relative path plus skip counts per category, so the agent can decide whether to re-run with `--force` or stage misses individually via `--file`.
-- Typical use: "set up a KB from this project's existing notes" → `kb bootstrap <name> --path ...` then `kb stage <name> --dir ~/Documents/project-foo/`, then a `kb-dream` pass to consolidate.
+- JSON output enumerates `staged`, `extracted`, `sources_kept`, and per-category `skipped` so the agent can decide whether to re-run with `--force`, `--keep-source`, or stage misses individually via `--file`.
+- Typical use: "set up a KB from this project's sources" → `kb bootstrap <name> --path ...` then `kb stage <name> --dir ~/Documents/project-foo/`, then a `kb-dream` pass to consolidate.
 
 ### Documents (`--file`)
 
-- Any text file, copied verbatim into `inbox/YYYY/MM/<timestamp>-<source-stem>.md`.
-- **No frontmatter, no auto-heading** — the file is what it is.
-- `--kind`, `--title`, `--source` are ignored for documents (they have no metadata layer).
-- Manual drag-and-drop produces the same shape, so dropping a `.md` into `inbox/` is a first-class path. The next `kb-dream` pass picks it up.
-- Commit message records the source filename (`kb: stage document <basename>`).
+For text formats: copied verbatim into `inbox/YYYY/MM/<timestamp>-<source-stem>.md`, no frontmatter, no auto-heading. The file is what it is.
+
+For extractable formats (`.pdf`, `.docx`, `.pptx`, `.xlsx`, `.epub`, `.html`/`.htm`): same destination shape, but content is the `markitdown` output, prepended with provenance frontmatter:
+
+```yaml
+---
+created_at: "<ISO>"
+extracted_from: "/abs/path/to/foo.pdf"
+extractor: "markitdown"
+kind: "extracted"
+source: "sources/2026/06/foo.pdf"     # only present when --keep-source was set
+---
+```
+
+- `--kind`, `--title`, `--source` are ignored (extracted documents own their own provenance).
+- `--keep-source` (default off) copies the original binary to `sources/YYYY/MM/<basename>.ext` alongside the extracted Markdown, and adds the `source:` line to frontmatter. Use when visual layout matters or you may re-extract later. Default behaviour drops the binary — the KB stays git-friendly.
+- Without `markitdown`: errors with an install hint (`pip install markitdown`).
+- Manual drag-and-drop of a `.md` into `inbox/` still produces the same shape as a text-format `--file`; first-class path. The next `kb-dream` pass picks it up.
+- Commit message: `kb: stage document <basename>` for text formats, `kb: stage extracted <basename>` (with optional `(+source)`) for extracted formats.
 
 ### URL pointers (`--url`)
 
