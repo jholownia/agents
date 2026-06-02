@@ -1,7 +1,7 @@
 {
   "name": "kb",
   "description": "Agent-maintained knowledge bases — persistent, scoped, searchable, git-backed. Ships six scoped skills (registry, info, remember, stage, recall, retrospective), four slash commands (/kb:bootstrap, /kb:add, /kb:status, /kb:sync), and a kb-dream consolidation agent, all over a shared `kb` CLI.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": {
     "name": "jholownia"
   },

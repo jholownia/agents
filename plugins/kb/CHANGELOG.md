@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 — 2026-06-02
+
+### Fixed
+- README drift left by the 0.3.0 restructure: the layout block listed a `dream/` skill directory and omitted `commands/` and `agents/`, and the "v0 scope" section still described consolidation as skill-led (`kb:dream`). Both now reflect the `kb-dream` agent. Version bumped so the plugin cache picks up the corrected docs.
+
 ## 0.3.0 — 2026-06-02
 
 ### Added

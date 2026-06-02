@@ -79,9 +79,12 @@ plugins/kb/
   scripts/
     kb_registry/                  # Python package
     test_kb_registry.sh
-  references/                     # shared docs (commands, kb-contract, safety)
+  references/                     # shared docs (commands, kb-contract, safety, scoping)
   skills/
-    registry/ info/ remember/ stage/ recall/ retrospective/ dream/
+    registry/ info/ remember/ stage/ recall/ retrospective/
+  commands/                       # /kb:bootstrap /kb:add /kb:status /kb:sync
+  agents/
+    kb-dream.md                   # inbox -> canonical consolidation (dry-run first)
 ```
 
 - **Config:** `~/.config/kb-registry/registry.json` (override with `--config`, `KB_REGISTRY_CONFIG`, or the project-scope plugin config below).
@@ -118,7 +121,7 @@ Resolution order (highest precedence first):
 
 Python 3 stdlib only. Lexical search via `rg`. Markdown/Git KBs. No MCP, vector search, or autonomous rewrites.
 
-Inbox consolidation is intentionally skill-led: `kb:dream` runs only when the user invokes it, produces a dry-run plan first, and writes canonical pages directly. The CLI guards against accidental canonical writes.
+Inbox consolidation is intentionally agent-led: the `kb-dream` agent runs only when the user invokes it, produces a dry-run plan first, and writes canonical pages on approval. The CLI guards against accidental canonical writes.
 
 ## Known gaps (not in v0)
 
