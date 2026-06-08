@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """KB CLI entry point.
 
-The Python package lives at the plugin-level `scripts/` directory. This
-entrypoint is at `bin/kb`, which Claude Code prepends to PATH when the
-plugin is enabled.
+The Python package lives at the plugin-level `scripts/` directory. Agent-
+facing skills/commands/agents reference this entrypoint as
+`${CLAUDE_PLUGIN_ROOT}/bin/kb` (per Anthropic plugin guidance — every
+intra-plugin path goes through CLAUDE_PLUGIN_ROOT, never PATH). Human users
+can symlink this onto PATH for convenience (`ln -sf "${CLAUDE_PLUGIN_ROOT}/bin/kb" ~/.local/bin/kb`)
+but the plugin itself does not rely on PATH injection.
 """
 
 import os

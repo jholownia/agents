@@ -10,7 +10,7 @@ The **first** skill to reach for in a session that might touch a KB. Cheap, read
 
 ## Sibling skills — where else to go
 
-- **Git / contract / clean-dirty state of a KB** → kb:registry (`kb status`).
+- **Git / contract / clean-dirty state of a KB** → kb:registry (`${CLAUDE_PLUGIN_ROOT}/bin/kb status`).
 - **"What's in the inbox" / content search / "what did we decide about X"** → kb:recall.
 - **End-of-session capture** → kb:retrospective.
 
@@ -20,7 +20,7 @@ Three layers exist: Claude's auto-memory, project `CLAUDE.md`/`AGENTS.md`, and t
 
 Quick summary:
 
-- **Durable facts** (project, domain, codebase, **or personal-life**) → KB via `kb remember` / `kb stage`.
+- **Durable facts** (project, domain, codebase, **or personal-life**) → KB via `${CLAUDE_PLUGIN_ROOT}/bin/kb remember` / `${CLAUDE_PLUGIN_ROOT}/bin/kb stage`.
 - **User preferences about agent behaviour** (`"address me as bro"`, `"I prefer rebase"`) and **short-lived project state** → auto-memory.
 - **Normative workflow rules** (`"don't push to master"`) → `CLAUDE.md` / `AGENTS.md`.
 
@@ -29,13 +29,13 @@ Quick summary:
 ## Commands
 
 ```bash
-kb list                     # all registered KBs
-kb brief <kb>               # compact summary (BRIEF.md)
+${CLAUDE_PLUGIN_ROOT}/bin/kb list                     # all registered KBs
+${CLAUDE_PLUGIN_ROOT}/bin/kb brief <kb>               # compact summary (BRIEF.md)
 ```
 
-- `kb list` is cheap; run it first when a KB might exist for the user's domain.
-- `kb brief` is the progressive-disclosure entrypoint — read it before searching.
+- `${CLAUDE_PLUGIN_ROOT}/bin/kb list` is cheap; run it first when a KB might exist for the user's domain.
+- `${CLAUDE_PLUGIN_ROOT}/bin/kb brief` is the progressive-disclosure entrypoint — read it before searching.
 
-If the user names something ending in `-kb` (e.g. `emma-kb`, `hydra-kb`), it is a knowledge base — start with `kb list`.
+If the user names something ending in `-kb` (e.g. `emma-kb`, `hydra-kb`), it is a knowledge base — start with `${CLAUDE_PLUGIN_ROOT}/bin/kb list`.
 
 Full routing rules: `${CLAUDE_PLUGIN_ROOT}/references/scoping.md`. Flag reference: `${CLAUDE_PLUGIN_ROOT}/references/commands.md`.

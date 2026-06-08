@@ -9,10 +9,10 @@ The kb plugin is *one* of three persistence layers available to an agent. The ri
 | User preferences about agent behaviour ("address me as bro", "I prefer rebase", "use terse output") | Claude's auto-memory |
 | Short-lived project state (current task, last error seen, in-progress debugging) | Claude's auto-memory |
 | Normative workflow rules ("don't push to master", "tests must hit a real DB") | `CLAUDE.md` / `AGENTS.md` (project or user scope) |
-| Durable facts — project, domain, codebase, **or personal-life** | KB `notes/` via `kb remember` |
-| Decisions, runbook material, longer-form facts | KB `inbox/` → canonical pages via `kb stage` + `kb-dream` |
-| URL pointers to read later | KB `inbox/` via `kb stage --url` |
-| Project TODOs that should survive sessions | KB `inbox/` via `kb stage --kind followup` |
+| Durable facts — project, domain, codebase, **or personal-life** | KB `notes/` via `${CLAUDE_PLUGIN_ROOT}/bin/kb remember` |
+| Decisions, runbook material, longer-form facts | KB `inbox/` → canonical pages via `${CLAUDE_PLUGIN_ROOT}/bin/kb stage` + `kb-dream` |
+| URL pointers to read later | KB `inbox/` via `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --url` |
+| Project TODOs that should survive sessions | KB `inbox/` via `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --kind followup` |
 
 ## Litmus test
 
@@ -31,7 +31,7 @@ The "personal vs project" axis is about *which KB* a fact lands in, not whether 
 
 ## Explicit invocation overrides the heuristic
 
-If the user types `/remember`, `kb remember ...`, `kb stage ...`, or otherwise explicitly invokes a KB skill or command, honour the routing they chose. The agent's job is to write what was asked, not to second-guess.
+If the user types `/remember`, `${CLAUDE_PLUGIN_ROOT}/bin/kb remember ...`, `${CLAUDE_PLUGIN_ROOT}/bin/kb stage ...`, or otherwise explicitly invokes a KB skill or command, honour the routing they chose. The agent's job is to write what was asked, not to second-guess.
 
 ## What never goes in a KB
 

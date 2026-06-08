@@ -21,7 +21,7 @@ Every knowledge base must contain:
 ### Lifecycle of each directory
 
 - `inbox/` — raw material. By default, `kb-dream` consolidates useful material from here into an indexable canonical section. Includes notes (`--note`), documents (`--file`), and URL pointers (`--url`).
-- `notes/` — **append-only**, never consolidated. Short single-paragraph facts written by `kb remember`. `kb-dream` never touches this directory.
+- `notes/` — **append-only**, never consolidated. Short single-paragraph facts written by `${CLAUDE_PLUGIN_ROOT}/bin/kb remember`. `kb-dream` never touches this directory.
 - `knowledge/` — seed section for synthesised long-form pages. Agents may add other top-level canonical sections (`runbooks/`, `decisions/`, `specs/`, etc.) when the KB calls for it.
 
 ### Three-layer scoping (what goes where)
@@ -56,7 +56,7 @@ Entries should record consumed inbox/source paths, canonical pages created or up
 
 ## Notes format
 
-Produced by `kb remember "<text>" [--tags <a,b,c>]`. Stored at `notes/YYYY/MM/<timestamp>-<slug>.md`:
+Produced by `${CLAUDE_PLUGIN_ROOT}/bin/kb remember "<text>" [--tags <a,b,c>]`. Stored at `notes/YYYY/MM/<timestamp>-<slug>.md`:
 
 ```yaml
 ---
@@ -67,7 +67,7 @@ EMMA's nightly job runs at 02:00 UTC via cron.
 ```
 
 - One fact per file. The text is the body, verbatim.
-- `tags:` is optional but recommended — `kb recall --tag <t>` uses it.
+- `tags:` is optional but recommended — `${CLAUDE_PLUGIN_ROOT}/bin/kb recall --tag <t>` uses it.
 - `kb-dream` never reads or modifies this directory.
 
 ## Inbox format
@@ -76,7 +76,7 @@ The inbox holds three shapes of material, distinguished by how they got there:
 
 ### Notes (agent-written, semi-structured)
 
-Produced by `kb stage --note ...`. Short observations: memory, preferences, decisions worth remembering. YAML frontmatter at the top:
+Produced by `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --note ...`. Short observations: memory, preferences, decisions worth remembering. YAML frontmatter at the top:
 
 ```yaml
 ---
@@ -101,7 +101,7 @@ Notes own their headings; the CLI does not prepend one.
 
 ### URL pointers (`kind: url`)
 
-Produced by `kb stage --url <url>`. The URL itself is the staged content; `kb-dream` fetches and summarises later. Frontmatter has `kind: url` and `url: <url>`; body is empty unless `--note "<description>"` was passed.
+Produced by `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --url <url>`. The URL itself is the staged content; `kb-dream` fetches and summarises later. Frontmatter has `kind: url` and `url: <url>`; body is empty unless `--note "<description>"` was passed.
 
 ```yaml
 ---
@@ -114,7 +114,7 @@ Optional description from the agent.
 
 ### Documents and extracted files
 
-Text documents are produced by `kb stage --file <path>` or by manually dropping a Markdown file into `inbox/`. No frontmatter, no auto-heading — the file is what it is. Provenance lives in the git commit message (`kb: stage document <basename>`).
+Text documents are produced by `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --file <path>` or by manually dropping a Markdown file into `inbox/`. No frontmatter, no auto-heading — the file is what it is. Provenance lives in the git commit message (`kb: stage document <basename>`).
 
 Extractable formats (`.pdf`, `.docx`, `.pptx`, `.xlsx`, `.epub`, `.html`) are converted to Markdown via `markitdown` when available. These extracted inbox files do carry provenance frontmatter (`kind: extracted`, `extracted_from`, `extractor`, optional `source` when `--keep-source` copies the original under `sources/`).
 
@@ -131,5 +131,5 @@ These fields apply to canonical pages in indexable sections, **not** inbox notes
 
 ## Validation
 
-`kb add` rejects missing contract files by default and accepts them only with `--force`.
-`kb status` reports missing contract files without mutating the KB.
+`${CLAUDE_PLUGIN_ROOT}/bin/kb add` rejects missing contract files by default and accepts them only with `--force`.
+`${CLAUDE_PLUGIN_ROOT}/bin/kb status` reports missing contract files without mutating the KB.

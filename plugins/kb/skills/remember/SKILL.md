@@ -12,8 +12,8 @@ Append a one-paragraph fact to a KB's `notes/` directory. Notes are append-only 
 
 The boundary is **lifecycle**, not length:
 
-- **`kb remember`** — atomic facts queryable as-is. They stand alone, never need synthesising into something bigger. Once written, they're final.
-- **`kb stage`** — raw material that should be folded into a larger canonical page by `kb-dream`. The note alone isn't the deliverable; the eventual `knowledge/` page is.
+- **`${CLAUDE_PLUGIN_ROOT}/bin/kb remember`** — atomic facts queryable as-is. They stand alone, never need synthesising into something bigger. Once written, they're final.
+- **`${CLAUDE_PLUGIN_ROOT}/bin/kb stage`** — raw material that should be folded into a larger canonical page by `kb-dream`. The note alone isn't the deliverable; the eventual `knowledge/` page is.
 
 If you're stating a single fact you'd want to look up later by tag or substring → `remember`. If you're producing input for a synthesis step → `stage`.
 
@@ -31,9 +31,9 @@ Good examples:
 ## Command
 
 ```bash
-kb remember "<one-sentence fact>"
-kb remember "<one-sentence fact>" --tags emma,domain
-kb remember "<one-sentence fact>" --kb <kb>
+${CLAUDE_PLUGIN_ROOT}/bin/kb remember "<one-sentence fact>"
+${CLAUDE_PLUGIN_ROOT}/bin/kb remember "<one-sentence fact>" --tags emma,domain
+${CLAUDE_PLUGIN_ROOT}/bin/kb remember "<one-sentence fact>" --kb <kb>
 ```
 
 - Writes to `notes/YYYY/MM/<timestamp>-<slug>.md` with `created_at` + `tags` frontmatter.

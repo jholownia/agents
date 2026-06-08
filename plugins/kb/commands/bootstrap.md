@@ -1,7 +1,7 @@
 ---
 description: Create or clone a knowledge base and register it.
 argument-hint: <name> [--path <path>] [--remote <url>] [--description "<text>"] [--default]
-allowed-tools: Bash(kb:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/bin/kb:*)
 ---
 
 # Bootstrap a knowledge base
@@ -13,7 +13,7 @@ The user invoked `/kb:bootstrap` to create a new KB. Their argument string:
 Run the underlying CLI to do the work and report the result:
 
 ```bash
-kb bootstrap $ARGUMENTS
+${CLAUDE_PLUGIN_ROOT}/bin/kb bootstrap $ARGUMENTS
 ```
 
 - The first positional argument is the KB name (required).
@@ -23,4 +23,4 @@ kb bootstrap $ARGUMENTS
 
 If the user omitted required arguments (no name), report the CLI's error directly — don't guess. If `--remote` was given and the target path already exists with content, the CLI will refuse without `--force`; surface that and ask whether to retry.
 
-After a successful bootstrap, suggest the next typical step: `kb stage <name> --note "..."` to start staging material, or `kb stage <name> --dir <path>` to bulk-ingest an existing source tree.
+After a successful bootstrap, suggest the next typical step: `${CLAUDE_PLUGIN_ROOT}/bin/kb stage <name> --note "..."` to start staging material, or `${CLAUDE_PLUGIN_ROOT}/bin/kb stage <name> --dir <path>` to bulk-ingest an existing source tree.

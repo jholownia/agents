@@ -1,4 +1,11 @@
+<!-- markdownlint-disable MD024 MD032 -->
+
 # Changelog
+
+## 0.5.0 — 2026-06-08
+
+### Fixed
+- All agent-facing CLI invocations now use `${CLAUDE_PLUGIN_ROOT}/bin/kb` instead of bare `kb`, per Anthropic's plugin guidance (`plugin-dev/skills/plugin-structure/SKILL.md` — Portable Path References). Bare `kb` was functionally a relative-to-PATH reference and broke in headless containers where Claude Code doesn't inject the plugin's `bin/` onto PATH (discovered during WARDEN v1 in the emma repo, which had to add a Dockerfile symlink workaround). Updated across `skills/`, `commands/`, `agents/`, `references/`, and `README.md`. Slash-command `allowed-tools` scoped to `Bash(${CLAUDE_PLUGIN_ROOT}/bin/kb:*)` to match the new invocation form. The `bin/kb` docstring no longer claims PATH injection; humans wanting a short alias can symlink `${CLAUDE_PLUGIN_ROOT}/bin/kb` onto `~/.local/bin` themselves.
 
 ## 0.4.0 — 2026-06-02
 

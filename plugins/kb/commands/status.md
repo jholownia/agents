@@ -1,7 +1,7 @@
 ---
 description: Show registration, git state, and contract status for one or all KBs.
 argument-hint: "[<kb>] [--all] [--fetch]"
-allowed-tools: Bash(kb:*)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/bin/kb:*)
 ---
 
 # KB status
@@ -13,12 +13,12 @@ The user invoked `/kb:status` to inspect KB state. Their argument string:
 Run the underlying CLI:
 
 ```bash
-kb status $ARGUMENTS
+${CLAUDE_PLUGIN_ROOT}/bin/kb status $ARGUMENTS
 ```
 
-- No argument and no `--all`: shows status for **all** registered KBs (this command does NOT fall back to the default KB — that's `kb status`'s deliberate behaviour).
+- No argument and no `--all`: shows status for **all** registered KBs (this command does NOT fall back to the default KB — that's `${CLAUDE_PLUGIN_ROOT}/bin/kb status`'s deliberate behaviour).
 - Positional `<kb>`: status for a single KB.
-- `--all`: explicit form for everyone (same as bare `kb status`).
+- `--all`: explicit form for everyone (same as bare `${CLAUDE_PLUGIN_ROOT}/bin/kb status`).
 - `--fetch`: fetch from the remote before reporting branch ahead/behind state (slow; opt-in).
 
 Status reports: path existence, git status (branch, clean/dirty), remote URL, and missing contract items. Surface the output verbatim; the user is the audience.

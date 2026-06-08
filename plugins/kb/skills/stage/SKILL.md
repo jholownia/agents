@@ -12,25 +12,25 @@ Stages material into a KB's `inbox/` for the next `kb-dream` consolidation pass.
 
 | Material | Verb |
 |---|---|
-| Short single-sentence project fact | `kb remember` (use kb:remember) |
-| Longer note / decision worth consolidating | `kb stage --note` |
-| A text file to ingest | `kb stage --file <path>` |
-| A directory of mixed sources | `kb stage --dir <path>` |
-| A PDF / DOCX / PPTX / XLSX / EPUB / HTML | `kb stage --file <path>` (auto-extracts) |
-| A URL to read and summarise later | `kb stage --url` |
-| A follow-up TODO for the next session | `kb stage --kind followup --note "..."` |
+| Short single-sentence project fact | `${CLAUDE_PLUGIN_ROOT}/bin/kb remember` (use kb:remember) |
+| Longer note / decision worth consolidating | `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --note` |
+| A text file to ingest | `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --file <path>` |
+| A directory of mixed sources | `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --dir <path>` |
+| A PDF / DOCX / PPTX / XLSX / EPUB / HTML | `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --file <path>` (auto-extracts) |
+| A URL to read and summarise later | `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --url` |
+| A follow-up TODO for the next session | `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --kind followup --note "..."` |
 
 ## Commands
 
 ```bash
-kb stage <kb> --note "<text>"                            # agent-written note
-kb stage <kb> --kind decision --note "<text>"            # note with explicit kind
-kb stage <kb> --kind followup --note "<deferred work>"   # project TODO
-kb stage <kb> --file <path>                              # text or extractable file
-kb stage <kb> --file <path.pdf> --keep-source            # also copy original to sources/
-kb stage <kb> --dir <path>                               # bulk-stage a directory
-kb stage <kb> --url <https://...>                        # URL pointer
-kb stage <kb> --url <https://...> --note "<why>"         # URL + description
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --note "<text>"                            # agent-written note
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --kind decision --note "<text>"            # note with explicit kind
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --kind followup --note "<deferred work>"   # project TODO
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --file <path>                              # text or extractable file
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --file <path.pdf> --keep-source            # also copy original to sources/
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --dir <path>                               # bulk-stage a directory
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --url <https://...>                        # URL pointer
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --url <https://...> --note "<why>"         # URL + description
 ```
 
 - `--file`, `--dir`, and `--url` are mutex with each other. `--note` may accompany `--url` as a description body.
@@ -42,9 +42,9 @@ kb stage <kb> --url <https://...> --note "<why>"         # URL + description
 
 When given a PDF (or `.docx` / `.pptx` / `.xlsx` / `.epub` / `.html`), extract to Markdown if available, stage the extracted text, preserve provenance, and only keep the binary when explicitly useful.
 
-- **Default**: `kb stage --file foo.pdf` runs `markitdown foo.pdf`, writes the extracted text into `inbox/...md` with `extracted_from`, `extractor`, and `kind: extracted` frontmatter, **drops the binary**. KB stays git-friendly. Same for `--dir`: every extractable file in the tree converts in-place; verbatim copies handle the `.md`/`.txt` peers.
+- **Default**: `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --file foo.pdf` runs `markitdown foo.pdf`, writes the extracted text into `inbox/...md` with `extracted_from`, `extractor`, and `kind: extracted` frontmatter, **drops the binary**. KB stays git-friendly. Same for `--dir`: every extractable file in the tree converts in-place; verbatim copies handle the `.md`/`.txt` peers.
 - **Opt-in `--keep-source`**: also copies the original to `sources/<YYYY>/<MM>/<basename>.pdf` and adds a `source:` pointer in the extracted file's frontmatter. Use when the source matters: visual layout (slides, diagrams), reference docs you may re-extract with a better tool, scanned PDFs you may OCR later.
-- **No markitdown installed**: `kb stage --file foo.pdf` errors with an install hint (`pip install markitdown`). `kb stage --dir <path>` skips extractable files with the same hint and surfaces a count in the summary; the text files in the tree still ingest normally.
+- **No markitdown installed**: `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --file foo.pdf` errors with an install hint (`pip install markitdown`). `${CLAUDE_PLUGIN_ROOT}/bin/kb stage --dir <path>` skips extractable files with the same hint and surfaces a count in the summary; the text files in the tree still ingest normally.
 
 When **not** to keep the source:
 - Chat exports, blog post PDFs, plain prose reports — the extracted text *is* the content.

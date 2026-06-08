@@ -58,10 +58,10 @@ Inbox material is source code. Canonical pages (under `knowledge/` and any other
 ### 1. Orient
 
 ```bash
-kb list
-kb brief <kb>
-kb status <kb>
-kb pending <kb>
+${CLAUDE_PLUGIN_ROOT}/bin/kb list
+${CLAUDE_PLUGIN_ROOT}/bin/kb brief <kb>
+${CLAUDE_PLUGIN_ROOT}/bin/kb status <kb>
+${CLAUDE_PLUGIN_ROOT}/bin/kb pending <kb>
 ```
 
 Then read:
@@ -106,8 +106,8 @@ Treat any agent-supplied description body on a URL pointer as a hint about why t
 Before creating or changing canonical pages, search the KB:
 
 ```bash
-kb search <kb> "<topic>"
-kb recall <kb> --query "<topic>"
+${CLAUDE_PLUGIN_ROOT}/bin/kb search <kb> "<topic>"
+${CLAUDE_PLUGIN_ROOT}/bin/kb recall <kb> --query "<topic>"
 ```
 
 Update existing pages when they are the natural home. Create new pages only when the knowledge has no good home.
@@ -147,7 +147,7 @@ When approved, edit the KB directly:
 
 - Write synthesised pages into the appropriate canonical section (`knowledge/` by default, or another section when the KB convention calls for it).
 - Update `INDEX.md` by hand when navigation changes — semantic groupings are a curation task, not a generation task.
-- Run `kb reindex <kb> --dry-run` to check the generated manifest; rebuild with plain `kb reindex <kb>` once content changes are settled.
+- Run `${CLAUDE_PLUGIN_ROOT}/bin/kb reindex <kb> --dry-run` to check the generated manifest; rebuild with plain `${CLAUDE_PLUGIN_ROOT}/bin/kb reindex <kb>` once content changes are settled.
 - Update `BRIEF.md` only when scope/key areas changed.
 - Stamp `last_reviewed: <ISO date>` in the frontmatter of any canonical page you touched.
 - When a new note contradicts an existing canonical claim, **replace the old claim** and append a supersession entry to `LOG.md` listing both the consumed inbox note and the prior canonical claim. Interference, not silent rewrite.
@@ -159,14 +159,14 @@ Use the KB's own conventions if they differ from this default.
 ### 6. Validate
 
 ```bash
-kb status <kb>
-kb reindex <kb> --dry-run
-kb search <kb> "<representative topic>"
+${CLAUDE_PLUGIN_ROOT}/bin/kb status <kb>
+${CLAUDE_PLUGIN_ROOT}/bin/kb reindex <kb> --dry-run
+${CLAUDE_PLUGIN_ROOT}/bin/kb search <kb> "<representative topic>"
 git -C <kb-path> diff --stat
 git -C <kb-path> diff
 ```
 
-`kb reindex --dry-run` reports how many entries would land in `index.json` and whether anything changed.
+`${CLAUDE_PLUGIN_ROOT}/bin/kb reindex --dry-run` reports how many entries would land in `index.json` and whether anything changed.
 
 Review the diff for overbroad rewrites, invented facts, lost provenance, and accidental raw transcript import.
 
@@ -215,7 +215,7 @@ supersedes:
 ---
 ```
 
-These are conventions, not CLI-enforced fields. Write them when consolidating; `kb forget` and any future supersession tooling may consume them.
+These are conventions, not CLI-enforced fields. Write them when consolidating; `${CLAUDE_PLUGIN_ROOT}/bin/kb forget` and any future supersession tooling may consume them.
 
 ## Default processed-note handling
 

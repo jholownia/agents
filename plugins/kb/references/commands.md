@@ -48,9 +48,9 @@ Use the project-scope `.claude/settings.json` to bind a different KB per repo wi
 Create or clone a KB and register it.
 
 ```bash
-kb bootstrap <name> --path <path>
-kb bootstrap <name> --path <path> --remote <url>
-kb bootstrap <name> --remote <url>
+${CLAUDE_PLUGIN_ROOT}/bin/kb bootstrap <name> --path <path>
+${CLAUDE_PLUGIN_ROOT}/bin/kb bootstrap <name> --path <path> --remote <url>
+${CLAUDE_PLUGIN_ROOT}/bin/kb bootstrap <name> --remote <url>
 ```
 
 - If `--remote` is provided and path does not exist or is empty, clones the remote.
@@ -63,7 +63,7 @@ kb bootstrap <name> --remote <url>
 Register an existing KB directory.
 
 ```bash
-kb add <name> --path <path> [--remote <url>] [--description <text>] [--default]
+${CLAUDE_PLUGIN_ROOT}/bin/kb add <name> --path <path> [--remote <url>] [--description <text>] [--default]
 ```
 
 - Validates the path exists and checks KB contract.
@@ -75,8 +75,8 @@ kb add <name> --path <path> [--remote <url>] [--description <text>] [--default]
 Remove a KB from the registry.
 
 ```bash
-kb remove <name>
-kb remove <name> --delete-local --yes
+${CLAUDE_PLUGIN_ROOT}/bin/kb remove <name>
+${CLAUDE_PLUGIN_ROOT}/bin/kb remove <name> --delete-local --yes
 ```
 
 - Default: removes registry entry only, no file deletion.
@@ -87,8 +87,8 @@ kb remove <name> --delete-local --yes
 List all configured KBs.
 
 ```bash
-kb list
-kb list --json
+${CLAUDE_PLUGIN_ROOT}/bin/kb list
+${CLAUDE_PLUGIN_ROOT}/bin/kb list --json
 ```
 
 ## status
@@ -96,22 +96,22 @@ kb list --json
 Show registry and git status.
 
 ```bash
-kb status [<kb>]
-kb status --all
+${CLAUDE_PLUGIN_ROOT}/bin/kb status [<kb>]
+${CLAUDE_PLUGIN_ROOT}/bin/kb status --all
 ```
 
 Shows: path existence, git status, branch, clean/dirty, remote URL, missing contract files.
 
-Note: bare `kb status` (no KB name, no `--all`) shows **all** KBs — it does *not* fall back to the default KB. `brief`/`open`/`stage`/`pending` *do* fall back to the default KB when name is omitted.
+Note: bare `${CLAUDE_PLUGIN_ROOT}/bin/kb status` (no KB name, no `--all`) shows **all** KBs — it does *not* fall back to the default KB. `brief`/`open`/`stage`/`pending` *do* fall back to the default KB when name is omitted.
 
 ## remember
 
 Append a short single-paragraph memory to `<kb>/notes/`.
 
 ```bash
-kb remember "<text>"
-kb remember "<text>" --tags emma,domain
-kb remember "<text>" --kb <kb>
+${CLAUDE_PLUGIN_ROOT}/bin/kb remember "<text>"
+${CLAUDE_PLUGIN_ROOT}/bin/kb remember "<text>" --tags emma,domain
+${CLAUDE_PLUGIN_ROOT}/bin/kb remember "<text>" --kb <kb>
 ```
 
 - Writes to `notes/YYYY/MM/<timestamp>-<slug>.md` with `created_at` and (optional) `tags` frontmatter.
@@ -121,7 +121,7 @@ kb remember "<text>" --kb <kb>
 - Use for **durable facts that are expensive to re-derive but too small for a canonical page** — project, domain, codebase, or personal-life. Examples: "EMMA's nightly job runs at 02:00 UTC via cron"; "My birthday is 15 November".
 - Routes by the target KB's stated purpose. Project KBs hold project/domain/codebase facts; a personal `user-kb` (if registered) holds personal-life facts.
 - Do **not** use for user preferences about agent behaviour ("address me as X", "I prefer rebase") or short-lived project state — those belong in Claude's auto-memory.
-- Explicit user invocation (`/remember`, `kb remember ...`) overrides the heuristic: honour the routing the user chose.
+- Explicit user invocation (`/remember`, `${CLAUDE_PLUGIN_ROOT}/bin/kb remember ...`) overrides the heuristic: honour the routing the user chose.
 - `notes/` is append-only: `kb-dream` never touches it.
 
 ## recall
@@ -129,25 +129,25 @@ kb remember "<text>" --kb <kb>
 Search synthesised material in indexable sections, **excluding** the raw `inbox/`.
 
 ```bash
-kb recall [<kb>] --query "<text>"
-kb recall [<kb>] --tag <tag>
-kb recall --query "<text>" --max-results 5
+${CLAUDE_PLUGIN_ROOT}/bin/kb recall [<kb>] --query "<text>"
+${CLAUDE_PLUGIN_ROOT}/bin/kb recall [<kb>] --tag <tag>
+${CLAUDE_PLUGIN_ROOT}/bin/kb recall --query "<text>" --max-results 5
 ```
 
 - `--query` checks `index.json` first, then runs lexical (`rg`-backed) search across indexable sections.
 - `--tag` lists pages whose frontmatter `tags:` includes the given tag.
 - One of `--query` or `--tag` is required.
 - Defaults: 20 total results.
-- Distinct from `kb search`, which covers the whole KB including the inbox. Use `recall` for "what do we know about X" style questions; use `search` when you specifically need to grep raw material.
+- Distinct from `${CLAUDE_PLUGIN_ROOT}/bin/kb search`, which covers the whole KB including the inbox. Use `recall` for "what do we know about X" style questions; use `search` when you specifically need to grep raw material.
 
 ## pending
 
 List unprocessed inbox material.
 
 ```bash
-kb pending [<kb>]
-kb pending <kb> --max-results 10
-kb pending --json
+${CLAUDE_PLUGIN_ROOT}/bin/kb pending [<kb>]
+${CLAUDE_PLUGIN_ROOT}/bin/kb pending <kb> --max-results 10
+${CLAUDE_PLUGIN_ROOT}/bin/kb pending --json
 ```
 
 - Walks `<kb>/inbox/`, skipping `inbox/processed/` and `README.md`.
@@ -163,8 +163,8 @@ Useful as a "what was I in the middle of?" check when picking up where a previou
 Print the compact KB summary (BRIEF.md).
 
 ```bash
-kb brief <kb>
-kb brief <kb> --max-chars 5000
+${CLAUDE_PLUGIN_ROOT}/bin/kb brief <kb>
+${CLAUDE_PLUGIN_ROOT}/bin/kb brief <kb> --max-chars 5000
 ```
 
 Default max: 12,000 characters.
@@ -174,8 +174,8 @@ Default max: 12,000 characters.
 Read a specific KB file by relative path.
 
 ```bash
-kb open <kb> <path>
-kb open <kb> <path> --max-chars 10000
+${CLAUDE_PLUGIN_ROOT}/bin/kb open <kb> <path>
+${CLAUDE_PLUGIN_ROOT}/bin/kb open <kb> <path> --max-chars 10000
 ```
 
 - Rejects absolute paths and path traversal.
@@ -187,10 +187,10 @@ kb open <kb> <path> --max-chars 10000
 Lexical search using `rg` (with Python fallback).
 
 ```bash
-kb search <kb> "<query>"
-kb search "<query>"              # search all KBs
-kb search <kb> "<query>" --max-results 10 --glob "*.md"
-kb search <kb> "<query>" --exclude-inbox
+${CLAUDE_PLUGIN_ROOT}/bin/kb search <kb> "<query>"
+${CLAUDE_PLUGIN_ROOT}/bin/kb search "<query>"              # search all KBs
+${CLAUDE_PLUGIN_ROOT}/bin/kb search <kb> "<query>" --max-results 10 --glob "*.md"
+${CLAUDE_PLUGIN_ROOT}/bin/kb search <kb> "<query>" --exclude-inbox
 ```
 
 - Default: 20 total results, up to 3 matches per file, inbox included.
@@ -209,12 +209,12 @@ Stage one of four shapes into a KB inbox:
 - **Directory** — bulk-stage every text file under a source tree as documents.
 
 ```bash
-kb stage <kb> --note "<text>"                              # note
-kb stage <kb> --kind decision --note "<text>" --title T    # note with kind+title
-kb stage <kb> --file <path>                                # document
-kb stage <kb> --url <https://...>                          # URL pointer
-kb stage <kb> --url <https://...> --note "<description>"   # URL + description
-kb stage <kb> --dir <path>                                 # bulk: every text file under <path>
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --note "<text>"                              # note
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --kind decision --note "<text>" --title T    # note with kind+title
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --file <path>                                # document
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --url <https://...>                          # URL pointer
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --url <https://...> --note "<description>"   # URL + description
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --dir <path>                                 # bulk: every text file under <path>
 ```
 
 Mode is determined by which flag is set. `--dir` is mutually exclusive with `--note`, `--file`, and `--url`. `--file` is mutually exclusive with `--note` and `--url`. `--note` may accompany `--url` as an optional description body.
@@ -236,7 +236,7 @@ Mode is determined by which flag is set. `--dir` is mutually exclusive with `--n
 - All files land under a single `inbox/YYYY/MM/<timestamp>-NNN-<slug>.md` prefix and are committed together: `kb: stage directory <basename> (N files[, +K source])`.
 - `--kind`, `--title`, `--source`, `--note` are ignored for `--dir`; extracted files carry their own provenance frontmatter, while text files are copied verbatim. A warning is printed if these flags are set.
 - JSON output enumerates `staged`, `extracted`, `sources_kept`, and per-category `skipped` so the agent can decide whether to re-run with `--force`, `--keep-source`, or stage misses individually via `--file`.
-- Typical use: "set up a KB from this project's sources" → `kb bootstrap <name> --path ...` then `kb stage <name> --dir ~/Documents/project-foo/`, then a `kb-dream` pass to consolidate.
+- Typical use: "set up a KB from this project's sources" → `${CLAUDE_PLUGIN_ROOT}/bin/kb bootstrap <name> --path ...` then `${CLAUDE_PLUGIN_ROOT}/bin/kb stage <name> --dir ~/Documents/project-foo/`, then a `kb-dream` pass to consolidate.
 
 ### Documents (`--file`)
 
@@ -282,10 +282,10 @@ source: "sources/2026/06/foo.pdf"     # only present when --keep-source was set
 Rebuild `<kb>/index.json` — a structured manifest of every Markdown file under auto-discovered indexable sections (excluding READMEs and dotfiles).
 
 ```bash
-kb reindex [<kb>]
-kb reindex [<kb>] --dry-run
-kb reindex [<kb>] --no-commit
-kb reindex --json
+${CLAUDE_PLUGIN_ROOT}/bin/kb reindex [<kb>]
+${CLAUDE_PLUGIN_ROOT}/bin/kb reindex [<kb>] --dry-run
+${CLAUDE_PLUGIN_ROOT}/bin/kb reindex [<kb>] --no-commit
+${CLAUDE_PLUGIN_ROOT}/bin/kb reindex --json
 ```
 
 - Each entry: `path`, `title`, `section` (top-level directory), `tags`, `summary` (first prose paragraph, ~200 chars), `word_count`, `last_modified` (ISO, from git), optional `kind` (when frontmatter carries one).
@@ -296,20 +296,20 @@ kb reindex --json
 - Falls back to the default KB when `<kb>` is omitted.
 - `INDEX.md` is left untouched — that file stays agent-curated narrative. The two indices serve different audiences: `INDEX.md` for humans/agents reading prose, `index.json` for machine retrieval.
 
-`kb recall` consults `index.json` first (title/tag/summary hits) before falling back to body grep. When `index.json` is absent, `kb recall` still works but prints a tip to run `kb reindex`.
+`${CLAUDE_PLUGIN_ROOT}/bin/kb recall` consults `index.json` first (title/tag/summary hits) before falling back to body grep. When `index.json` is absent, `${CLAUDE_PLUGIN_ROOT}/bin/kb recall` still works but prints a tip to run `${CLAUDE_PLUGIN_ROOT}/bin/kb reindex`.
 
-Refresh is explicit: `kb remember`, `kb stage`, and `kb-dream` do not auto-rebuild. Run `kb reindex --dry-run` during a writing cluster, then rebuild the generated index after the content changes are settled.
+Refresh is explicit: `${CLAUDE_PLUGIN_ROOT}/bin/kb remember`, `${CLAUDE_PLUGIN_ROOT}/bin/kb stage`, and `kb-dream` do not auto-rebuild. Run `${CLAUDE_PLUGIN_ROOT}/bin/kb reindex --dry-run` during a writing cluster, then rebuild the generated index after the content changes are settled.
 
 ## forget
 
 Remove a single page from an indexable section.
 
 ```bash
-kb forget [<kb>] <path>
-kb forget [<kb>] <path> --reason "<text>"
-kb forget [<kb>] <path> --dry-run
-kb forget [<kb>] <path> --no-commit
-kb forget --json [<kb>] <path>
+${CLAUDE_PLUGIN_ROOT}/bin/kb forget [<kb>] <path>
+${CLAUDE_PLUGIN_ROOT}/bin/kb forget [<kb>] <path> --reason "<text>"
+${CLAUDE_PLUGIN_ROOT}/bin/kb forget [<kb>] <path> --dry-run
+${CLAUDE_PLUGIN_ROOT}/bin/kb forget [<kb>] <path> --no-commit
+${CLAUDE_PLUGIN_ROOT}/bin/kb forget --json [<kb>] <path>
 ```
 
 - `<path>` must be relative to the KB root and live under an indexable section. Inbox/source/tool material is out of scope (use direct git operations or move inbox material into `inbox/processed/`).
@@ -319,11 +319,11 @@ kb forget --json [<kb>] <path>
 
 ### Soft for retrieval, hard for surface
 
-Forget removes the file from the agent's working surface — `kb recall`, `kb search`, `kb open`, `index.json` after the next reindex — but git history preserves the content. `git log --all -- <path>` recovers what was forgotten and when. This is the v0 stand-in for `kb supersede`: replacement is implicit via git history.
+Forget removes the file from the agent's working surface — `${CLAUDE_PLUGIN_ROOT}/bin/kb recall`, `${CLAUDE_PLUGIN_ROOT}/bin/kb search`, `${CLAUDE_PLUGIN_ROOT}/bin/kb open`, `index.json` after the next reindex — but git history preserves the content. `git log --all -- <path>` recovers what was forgotten and when. This is the v0 stand-in for `kb supersede`: replacement is implicit via git history.
 
 ### What forget does NOT do
 
-- **Auto-rebuild `index.json`.** Run `kb reindex <kb>` afterwards. (Stale-index tip is printed.)
+- **Auto-rebuild `index.json`.** Run `${CLAUDE_PLUGIN_ROOT}/bin/kb reindex <kb>` afterwards. (Stale-index tip is printed.)
 - **Auto-edit `INDEX.md`.** If the forgotten path is referenced from the agent-curated `INDEX.md`, forget warns and leaves the link in place — edit by hand. The check is a literal Markdown-link substring scan for that relative path.
 
 Exit codes follow the global table at the top of this file: `1` on filesystem/commit failure or missing file, `2` on bad arguments (e.g. path outside indexable sections), `3` on safety rejection (traversal, protected file).
@@ -333,8 +333,8 @@ Exit codes follow the global table at the top of this file: `1` on filesystem/co
 Synchronize KB git repos with their remotes.
 
 ```bash
-kb sync <kb>
-kb sync --all
+${CLAUDE_PLUGIN_ROOT}/bin/kb sync <kb>
+${CLAUDE_PLUGIN_ROOT}/bin/kb sync --all
 ```
 
 - Pulls with rebase, then pushes local commits.

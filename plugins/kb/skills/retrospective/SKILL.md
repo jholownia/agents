@@ -6,7 +6,7 @@ version: 0.2.0
 
 # kb:retrospective
 
-End-of-session capture of knowledge that took meaningful work to derive and would be costly to rediscover. This skill **does not introduce new CLI verbs** — it teaches *when* and *what* to capture using the existing `kb remember` and `kb stage` verbs.
+End-of-session capture of knowledge that took meaningful work to derive and would be costly to rediscover. This skill **does not introduce new CLI verbs** — it teaches *when* and *what* to capture using the existing `${CLAUDE_PLUGIN_ROOT}/bin/kb remember` and `${CLAUDE_PLUGIN_ROOT}/bin/kb stage` verbs.
 
 ## When to use
 
@@ -57,11 +57,11 @@ If any answer is "no", skip it. If unsure on a large body of material, ask the u
 
 | Category | Verb | Notes |
 |---|---|---|
-| Short factual finding | `kb remember "<text>" --tags ...` | One sentence, queryable by tag |
-| Workflow pitfall, debugging gotcha | `kb stage <kb> --kind retrospective --note "..."` | Inbox material, dream consolidates later |
-| Research synthesis worth a canonical page | `kb stage <kb> --kind retrospective --note "..."` | Same — dream picks shape |
-| Specs / plans / TODOs for next session | `kb stage <kb> --kind followup --note "..."` | Surfaces in `kb pending` |
-| URL discovered during research | `kb stage <kb> --url <url>` | Dream fetches and summarises |
+| Short factual finding | `${CLAUDE_PLUGIN_ROOT}/bin/kb remember "<text>" --tags ...` | One sentence, queryable by tag |
+| Workflow pitfall, debugging gotcha | `${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --kind retrospective --note "..."` | Inbox material, dream consolidates later |
+| Research synthesis worth a canonical page | `${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --kind retrospective --note "..."` | Same — dream picks shape |
+| Specs / plans / TODOs for next session | `${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --kind followup --note "..."` | Surfaces in `${CLAUDE_PLUGIN_ROOT}/bin/kb pending` |
+| URL discovered during research | `${CLAUDE_PLUGIN_ROOT}/bin/kb stage <kb> --url <url>` | Dream fetches and summarises |
 
 If the user has multiple registered KBs, ask which one (or default to the project's KB if the session's work was clearly scoped to one project).
 

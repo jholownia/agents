@@ -27,10 +27,10 @@ Three Claude Code surfaces over a shared `kb` CLI:
 
 | Command | Wraps |
 |---|---|
-| `/kb:bootstrap <name> [--path ...]` | `kb bootstrap` |
-| `/kb:add <name> --path ... [--remote ...]` | `kb add` |
-| `/kb:status [<kb>] [--all]` | `kb status` |
-| `/kb:sync [<kb>] [--all]` | `kb sync` |
+| `/kb:bootstrap <name> [--path ...]` | `${CLAUDE_PLUGIN_ROOT}/bin/kb bootstrap` |
+| `/kb:add <name> --path ... [--remote ...]` | `${CLAUDE_PLUGIN_ROOT}/bin/kb add` |
+| `/kb:status [<kb>] [--all]` | `${CLAUDE_PLUGIN_ROOT}/bin/kb status` |
+| `/kb:sync [<kb>] [--all]` | `${CLAUDE_PLUGIN_ROOT}/bin/kb sync` |
 
 **Agent**:
 
@@ -54,20 +54,20 @@ Personal-life facts qualify if you have a personal `user-kb`; otherwise prefer a
 
 ```bash
 # Bootstrap a new KB
-kb bootstrap my-project --path ~/knowledge/my-project-kb
+${CLAUDE_PLUGIN_ROOT}/bin/kb bootstrap my-project --path ~/knowledge/my-project-kb
 
 # Remember a short project fact
-kb remember "Customer A12 wants weekly reports on Mondays." --tags my-project,reporting
+${CLAUDE_PLUGIN_ROOT}/bin/kb remember "Customer A12 wants weekly reports on Mondays." --tags my-project,reporting
 
 # Stage a longer note for the next dream pass
-kb stage my-project --kind decision --note "We chose X over Y because Z."
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage my-project --kind decision --note "We chose X over Y because Z."
 
 # Save a URL to summarise later
-kb stage my-project --url "https://example.com/article" --note "Why this matters"
+${CLAUDE_PLUGIN_ROOT}/bin/kb stage my-project --url "https://example.com/article" --note "Why this matters"
 
 # Recall what we know
-kb recall my-project --query "weekly reports"
-kb recall my-project --tag reporting
+${CLAUDE_PLUGIN_ROOT}/bin/kb recall my-project --query "weekly reports"
+${CLAUDE_PLUGIN_ROOT}/bin/kb recall my-project --tag reporting
 ```
 
 ## Layout
@@ -127,9 +127,9 @@ Inbox consolidation is intentionally agent-led: the `kb-dream` agent runs only w
 
 These are real gaps the subagent dogfood pass surfaced; deferred to v0.1+:
 
-- **Mutation of existing notes beyond deletion** — `kb forget` removes a page from the working surface, but there is no CLI verb for "edit this note's text" or "retag this page". Workaround: edit the file/frontmatter directly and commit.
+- **Mutation of existing notes beyond deletion** — `${CLAUDE_PLUGIN_ROOT}/bin/kb forget` removes a page from the working surface, but there is no CLI verb for "edit this note's text" or "retag this page". Workaround: edit the file/frontmatter directly and commit.
 - **Re-tagging existing notes** — same: edit frontmatter directly. Tag mutations are append-only-from-the-CLI today.
-- **Dream-history queries beyond `kb open <kb> LOG.md`** — there's no CLI verb to filter LOG entries by date, kind, or supersession. `kb open` is sufficient for v0.
+- **Dream-history queries beyond `${CLAUDE_PLUGIN_ROOT}/bin/kb open <kb> LOG.md`** — there's no CLI verb to filter LOG entries by date, kind, or supersession. `${CLAUDE_PLUGIN_ROOT}/bin/kb open` is sufficient for v0.
 - **Text documents staged via `--file` cannot carry user-supplied kind/title/source metadata** — by design, verbatim documents have no frontmatter. Extracted files carry automatic provenance frontmatter. A longer retrospective file still has to be staged via `--note "$(cat file.md)"` to get `kind: retrospective`.
 - **`bin/kb` PATH injection** depends on the plugin being installed via Claude Code. Local development uses `plugins/kb/bin/kb` explicitly.
 

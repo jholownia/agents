@@ -29,9 +29,9 @@ All agent writes go to `inbox/` only.
 
 ## Git safety
 
-- `kb stage` rejects unsupported binaries and warns on text files over 1 MB (override with `--force`).
-- `kb stage` stages and commits only the newly created inbox/source files, never the whole KB.
-- `kb sync` stops on any dirty working tree in v0.
-- `kb remove --delete-local` refuses dirty KBs unless `--force` is explicitly provided.
+- `${CLAUDE_PLUGIN_ROOT}/bin/kb stage` rejects unsupported binaries and warns on text files over 1 MB (override with `--force`).
+- `${CLAUDE_PLUGIN_ROOT}/bin/kb stage` stages and commits only the newly created inbox/source files, never the whole KB.
+- `${CLAUDE_PLUGIN_ROOT}/bin/kb sync` stops on any dirty working tree in v0.
+- `${CLAUDE_PLUGIN_ROOT}/bin/kb remove --delete-local` refuses dirty KBs unless `--force` is explicitly provided.
 - No destructive git commands (reset --hard, force push, etc.).
 - Conflicts stop the operation — no auto-resolution.
