@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The kb test suite commits inside its temporary KB.
+      - name: Configure git identity
+        run: |
+          git config --global user.name "ci"
+          git config --global user.email "ci@invalid"
+
+      - name: Version lockstep (marketplace.json vs plugin.json)
+        run: |
+          python3 - <<'EOF'
+          import json, pathlib, sys
+          market = {p["name"]: p["version"]
+                    for p in json.load(open(".claude-plugin/marketplace.json"))["plugins"]}
+          drift = []
+          for path in pathlib.Path("plugins").glob("*/.claude-plugin/plugin.json"):
+              plugin = json.load(open(path))
+              name, version = plugin["name"], plugin["version"]
+              if market.get(name) != version:
+                  drift.append(f"{name}: plugin.json={version} marketplace={market.get(name)}")
+          if set(market) - {json.load(open(p))["name"]
+                            for p in pathlib.Path("plugins").glob("*/.claude-plugin/plugin.json")}:
+              drift.append(f"marketplace entries without a plugin dir: {market}")
+          if drift:
+              sys.exit("version drift:\n" + "\n".join(drift))
+          print(f"lockstep OK: {market}")
+          EOF
+
+      - name: kb plugin tests
+        run: bash plugins/kb/scripts/test_kb_registry.sh
+
+      - name: spec-driven-execution plugin tests
+        run: bash plugins/spec-driven-execution/scripts/test_spec_driven_execution.sh
