@@ -38,7 +38,6 @@ from .git_ops import (
     git_pull_rebase,
     git_push,
     git_remote_url,
-    git_status_porcelain,
 )
 from .kb_template import create_kb, validate_kb_contract
 from .metrics import track_command
@@ -398,6 +397,11 @@ def cmd_status(args, config, config_path):
     else:
         names = [kb["name"] for kb in config.get("kbs", [])]
 
+    if not names:
+        print("No KBs registered. Run /kb:bootstrap to create one or "
+              "/kb:add to register an existing one.")
+        return EXIT_OK
+
     results = []
     for name in names:
         kb = find_kb(config, name)
@@ -565,7 +569,11 @@ def cmd_remember(args, config, config_path):
         timestamp_slug = now.strftime("%Y%m%d-%H%M%S")
         slug = _slugify(args.text[:60])
         filename = f"{timestamp_slug}-{slug}.md"
-        rel_path = os.path.join("notes", date_dir, filename)
+        # Same-second calls with the same leading text would collide;
+        # _unique_rel_path numbers the variant instead of overwriting.
+        rel_path = _unique_rel_path(
+            kb_path, os.path.join("notes", date_dir, filename)
+        )
 
         # notes/ must exist (part of the KB contract).
         notes_root = os.path.join(kb_path, "notes")
@@ -854,6 +862,10 @@ def cmd_recall(args, config, config_path):
 
     if not args.query and not args.tag:
         print("Error: provide --query or --tag.", file=sys.stderr)
+        return EXIT_ARGS
+    if args.query and args.tag:
+        print("Error: --query and --tag are mutually exclusive; "
+              "run two recalls.", file=sys.stderr)
         return EXIT_ARGS
 
     all_results = []
@@ -1506,7 +1518,7 @@ def cmd_stage(args, config, config_path):
                 print("Warning: large file.", file=sys.stderr)
                 if not args.force:
                     return EXIT_ARGS
-            with open(src, "r") as f:
+            with open(src, "r", errors="replace") as f:
                 content = f.read()
         slug_source = os.path.splitext(os.path.basename(src))[0]
         if args.kind or args.title or args.source:
@@ -1542,7 +1554,11 @@ def cmd_stage(args, config, config_path):
         timestamp_slug = now.strftime("%Y%m%d-%H%M%S")
         slug = _slugify(slug_source)
         filename = f"{timestamp_slug}-{slug}.md"
-        rel_path = os.path.join("inbox", date_dir, filename)
+        # Same-second calls with the same slug would collide; number the
+        # variant instead of overwriting.
+        rel_path = _unique_rel_path(
+            kb_path, os.path.join("inbox", date_dir, filename)
+        )
 
         # Canonical write guard
         if check_canonical_write(kb_path, rel_path):
@@ -2109,7 +2125,6 @@ def build_parser():
                        parents=[shared])
     p.add_argument("kb", nargs="?")
     p.add_argument("--all", action="store_true")
-    p.add_argument("--fetch", action="store_true")
 
     # pending
     p = sub.add_parser(
@@ -2164,7 +2179,6 @@ def build_parser():
     p.add_argument("query")
     p.add_argument("--max-results", type=int)
     p.add_argument("--glob")
-    p.add_argument("--include-inbox", action="store_true", default=True)
     p.add_argument("--exclude-inbox", action="store_true", default=False)
 
     # stage

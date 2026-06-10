@@ -57,11 +57,6 @@ def git_is_dirty(cwd):
     return bool(out)
 
 
-def git_status_porcelain(cwd):
-    _, out, _ = _run(["git", "status", "--porcelain"], cwd=cwd)
-    return out
-
-
 def git_current_branch(cwd):
     ok, out, _ = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd)
     return out if ok else None

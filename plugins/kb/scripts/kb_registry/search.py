@@ -49,8 +49,10 @@ def _extract_title(abs_path):
 def _search_rg(path, query, max_results=20, glob_pattern=None,
                exclude_inbox=False):
     """Search using ripgrep. Returns list of result dicts."""
+    # --fixed-strings matches the Python fallback's re.escape semantics;
+    # -e keeps dash-prefixed queries from being parsed as rg flags.
     args = [
-        "rg", "--json",
+        "rg", "--json", "--fixed-strings",
         "--max-count", str(_DEFAULT_MAX_PER_FILE),
         "--glob", "!.git",
     ]
@@ -58,7 +60,7 @@ def _search_rg(path, query, max_results=20, glob_pattern=None,
         args += ["--glob", "!inbox/"]
     if glob_pattern:
         args += ["--glob", glob_pattern]
-    args += [query, path]
+    args += ["-e", query, path]
 
     try:
         r = subprocess.run(args, capture_output=True, text=True, timeout=30)

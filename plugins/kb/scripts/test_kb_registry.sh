@@ -92,6 +92,21 @@ run "list" $KB --config "$CONFIG" list
 run "list --json" $KB --config "$CONFIG" list --json
 run "status test" $KB --config "$CONFIG" status test
 
+# Empty registry: status prints the bootstrap/add hint promised by
+# commands/status.md.
+EMPTY_CONFIG="$TMPDIR/empty-registry.json"
+cat > "$EMPTY_CONFIG" <<JSON
+{"version": 1, "metrics_path": "$METRICS", "kbs": []}
+JSON
+EMPTY_STATUS=$($KB --config "$EMPTY_CONFIG" status 2>&1)
+if echo "$EMPTY_STATUS" | grep -q "No KBs registered"; then
+    PASS=$((PASS+1))
+    echo "  PASS  status on empty registry prints hint"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  status on empty registry printed: $EMPTY_STATUS"
+fi
+
 echo ""
 echo "--- 4. Brief ---"
 run "brief test" $KB --config "$CONFIG" brief test
@@ -102,6 +117,10 @@ echo ""
 echo "--- 5. Stage ---"
 run "stage decision" $KB --config "$CONFIG" stage test --kind decision --note "Test decision note."
 run "stage raw-note" $KB --config "$CONFIG" stage test --kind raw-note --note "Test raw note."
+
+# Non-UTF8 text files must stage without a traceback (bytes are replaced).
+printf 'latin1 probe: caf\xe9\n' > "$TMPDIR/latin1.txt"
+run "stage non-UTF8 file" $KB --config "$CONFIG" stage test --file "$TMPDIR/latin1.txt"
 
 # Verify only staged files are committed (not unrelated changes)
 echo "untracked" > "$TEST_KB/untracked.txt"
@@ -451,6 +470,29 @@ run "search test" $KB --config "$CONFIG" search test "decision"
 run "search --json" $KB --config "$CONFIG" search test "decision" --json
 run "search all KBs" $KB --config "$CONFIG" search "note"
 
+# Query is literal in both backends: regex metacharacters must match
+# verbatim (rg runs with --fixed-strings, fallback uses re.escape).
+$KB --config "$CONFIG" stage test --note "search-meta probe foo(bar) end" >/dev/null 2>&1
+META_OUT=$($KB --config "$CONFIG" search test "foo(bar)" 2>&1)
+if echo "$META_OUT" | grep -q "search-meta"; then
+    PASS=$((PASS+1))
+    echo "  PASS  search treats regex metacharacters literally"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  search missed literal 'foo(bar)': $META_OUT"
+fi
+
+# Dash-prefixed queries must not be parsed as rg flags.
+$KB --config "$CONFIG" stage test --note "dash probe -dash-token end" >/dev/null 2>&1
+DASH_OUT=$($KB --config "$CONFIG" search test -- "-dash-token" 2>&1)
+if echo "$DASH_OUT" | grep -q "dash probe"; then
+    PASS=$((PASS+1))
+    echo "  PASS  search handles dash-prefixed query"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  search missed dash-prefixed query: $DASH_OUT"
+fi
+
 echo ""
 echo "--- 6b. Remember + Recall ---"
 run "remember emma fact" $KB --config "$CONFIG" remember "EMMA's nightly job runs at 02:00 UTC via cron." --tags emma,runbook
@@ -506,6 +548,33 @@ fi
 
 # recall requires --query or --tag.
 run_fail 2 "recall requires --query or --tag" $KB --config "$CONFIG" recall test
+# ... and rejects both together (--tag used to be silently ignored).
+run_fail 2 "recall rejects --query + --tag" $KB --config "$CONFIG" recall test --query nightly --tag emma
+
+# Two remembers with identical text must yield two files, even within the
+# same second (filenames are second-granular; collisions get numbered).
+$KB --config "$CONFIG" remember "collision probe identical text" >/dev/null 2>&1
+$KB --config "$CONFIG" remember "collision probe identical text" >/dev/null 2>&1
+COLLISION_COUNT=$(find "$TEST_KB/notes" -name '*collision-probe*' | wc -l | tr -d ' ')
+if [ "$COLLISION_COUNT" -eq 2 ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  same-text remember x2 keeps both notes"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  same-text remember x2 left $COLLISION_COUNT notes (expected 2)"
+fi
+
+# Same invariant for stage.
+$KB --config "$CONFIG" stage test --note "stage collision probe" >/dev/null 2>&1
+$KB --config "$CONFIG" stage test --note "stage collision probe" >/dev/null 2>&1
+STAGE_COLLISIONS=$(find "$TEST_KB/inbox" -name '*stage-collision-probe*' | wc -l | tr -d ' ')
+if [ "$STAGE_COLLISIONS" -eq 2 ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  same-text stage x2 keeps both notes"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  same-text stage x2 left $STAGE_COLLISIONS notes (expected 2)"
+fi
 
 echo ""
 echo "--- 7b. Pending ---"
