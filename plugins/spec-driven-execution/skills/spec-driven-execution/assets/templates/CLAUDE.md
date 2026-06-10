@@ -40,6 +40,10 @@ resolved manually on merge.
 
 ## Workflow
 
+The steps below are **per-change**. (If the `spec-driven-execution` skill is
+driving, its phase table also covers scaffolding and decomposition: skill
+Phase 2 = steps 0–1 here, Phases 3–6 = steps 2–5.)
+
 0. **Context** — before framing, gather enough ground to know what "done" looks
    like. Read the source issue and any linked subissues. Read the relevant
    specs sections (with file paths). Inspect the current state of the code or

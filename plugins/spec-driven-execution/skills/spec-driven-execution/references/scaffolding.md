@@ -39,8 +39,8 @@ Then:
    ```
 3. Copy the protocol file and project template:
    ```bash
-   cp <skill-path>/assets/templates/CLAUDE.md .changes/CLAUDE.md
-   cp <skill-path>/assets/templates/PROJECT.md .changes/PROJECT.md
+   cp ${CLAUDE_PLUGIN_ROOT}/skills/spec-driven-execution/assets/templates/CLAUDE.md .changes/CLAUDE.md
+   cp ${CLAUDE_PLUGIN_ROOT}/skills/spec-driven-execution/assets/templates/PROJECT.md .changes/PROJECT.md
    ```
 4. Fill in `PROJECT.md`:
    - **Source:** the issue URL, the issue body **verbatim** (don't paraphrase

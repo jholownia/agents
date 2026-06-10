@@ -75,7 +75,7 @@ ${CLAUDE_PLUGIN_ROOT}/bin/kb recall my-project --tag reporting
 ```text
 plugins/kb/
   .claude-plugin/plugin.json
-  bin/kb                          # CLI entry (added to PATH on install)
+  bin/kb                          # CLI entry — invoked as ${CLAUDE_PLUGIN_ROOT}/bin/kb (not on PATH)
   scripts/
     kb_registry/                  # Python package
     test_kb_registry.sh
@@ -131,7 +131,7 @@ These are real gaps the subagent dogfood pass surfaced; deferred to v0.1+:
 - **Re-tagging existing notes** — same: edit frontmatter directly. Tag mutations are append-only-from-the-CLI today.
 - **Dream-history queries beyond `${CLAUDE_PLUGIN_ROOT}/bin/kb open <kb> LOG.md`** — there's no CLI verb to filter LOG entries by date, kind, or supersession. `${CLAUDE_PLUGIN_ROOT}/bin/kb open` is sufficient for v0.
 - **Text documents staged via `--file` cannot carry user-supplied kind/title/source metadata** — by design, verbatim documents have no frontmatter. Extracted files carry automatic provenance frontmatter. A longer retrospective file still has to be staged via `--note "$(cat file.md)"` to get `kind: retrospective`.
-- **`bin/kb` PATH injection** depends on the plugin being installed via Claude Code. Local development uses `plugins/kb/bin/kb` explicitly.
+- **No PATH injection for `bin/kb`** — Claude Code does not put plugin `bin/` directories on PATH; all agent-facing invocations use `${CLAUDE_PLUGIN_ROOT}/bin/kb`, and local development uses `plugins/kb/bin/kb` explicitly. Humans wanting a short `kb` alias can symlink the script into `~/.local/bin`.
 
 Resolved in v0.2 (originally listed here):
 

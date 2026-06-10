@@ -38,6 +38,9 @@ Skip it for single-commit work or anything you'd reasonably finish in one sittin
 ```text
 plugins/spec-driven-execution/
   .claude-plugin/plugin.json
+  CHANGELOG.md
+  scripts/
+    test_spec_driven_execution.sh   # structural smoke check
   skills/spec-driven-execution/
     SKILL.md
     references/         # framing.md, scaffolding.md, failure-modes.md

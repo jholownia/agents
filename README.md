@@ -46,20 +46,22 @@ Codex does not currently use Claude Code marketplaces directly in this repo. The
 
 ## Repository structure
 
-```
+```text
 agents/
 ├── .claude-plugin/
 │   └── marketplace.json      # Marketplace manifest
-├── context/                  # Design research and reference docs
-├── plugins/                  # Plugin directory
-│   └── <plugin-name>/        # One directory per plugin
-│       ├── .claude-plugin/
-│       │   └── plugin.json
-│       └── skills/
-│           └── <skill-name>/
-│               └── SKILL.md
+├── .github/workflows/ci.yml  # Runs each plugin's test script + version lockstep check
+├── AGENTS.md                 # Repo conventions (versioning, plugin cache gotcha)
+├── plugins/                  # One directory per plugin
+│   └── <plugin-name>/
+│       ├── .claude-plugin/plugin.json
+│       ├── CHANGELOG.md
+│       ├── skills/ commands/ agents/ references/ bin/   # whichever apply
+│       └── scripts/test_<plugin-name>.sh
 └── README.md
 ```
+
+See [`plugins/README.md`](plugins/README.md) for the authoritative per-plugin layout.
 
 ## Adding a plugin
 
