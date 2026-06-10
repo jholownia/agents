@@ -112,6 +112,16 @@ ${CLAUDE_PLUGIN_ROOT}/bin/kb recall <kb> --query "<topic>"
 
 Update existing pages when they are the natural home. Create new pages only when the knowledge has no good home.
 
+### 3a. Scan canonical pages for aged facts
+
+Canonical pages age into incorrectness, not just incompleteness — "migrating to X in July 2026" stops being true once July passes. While reading the canonical sections, look for:
+
+- future-tense claims carrying explicit dates or deadlines that have since passed
+- "current"/"planned"/"upcoming" qualifiers anchored to a date that is now history
+- stale `last_reviewed:` stamps (`rg 'last_reviewed: "2025' <kb-path>` style sweeps)
+
+For each aged fact, propose a revision in the dry-run plan's **Temporal Revisions** section. Rewrite to past tense only when the outcome is known from inbox material or the page itself; when the outcome is unknown, flag the claim as unverified rather than inventing a resolution. These revisions ride the same dry-run gate as new-fact consolidation — never apply them unreviewed.
+
 ### 4. Propose a dry run
 
 Use this output shape:
@@ -129,6 +139,11 @@ Use this output shape:
 - Create `knowledge/design/example.md`
 - Update `INDEX.md`
 - Append `LOG.md`
+
+### Temporal Revisions
+
+- `knowledge/roadmap.md` — "will migrate in June 2026": date passed, inbox confirms migration done → rewrite past tense
+- `knowledge/infra.md` — "upgrade planned for May": date passed, outcome unknown → mark unverified, add Open Question
 
 ### Provenance
 
