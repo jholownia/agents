@@ -2,6 +2,25 @@
 
 # Changelog
 
+## 0.6.0 — 2026-06-10
+
+### Added
+- `kb-dream` agent now runs a temporal revision pass during planning: scans canonical pages for future-tense claims whose dates have passed and proposes past-tense revisions (or unverified flags) in the dry-run plan's new "Temporal Revisions" section. Rides the existing dry-run gate — never auto-applied.
+- Version lockstep check in the test suite: `plugin.json`, the marketplace entry, and `kb_registry.__version__` must agree.
+- Regression tests for the fixes below (155 checks total).
+
+### Fixed
+- `remember`/`stage` no longer silently overwrite an existing note when two calls land in the same second with the same slug — collisions get numbered suffixes via `_unique_rel_path()`.
+- `stage --file` on a non-UTF8 text file no longer crashes with a traceback; undecodable bytes are replaced, matching `--dir` behaviour.
+- `search` treats the query as a literal string in both backends (rg now runs with `--fixed-strings -e`; previously rg interpreted regex metacharacters while the Python fallback escaped them) and dash-prefixed queries are no longer parsed as rg flags.
+- `recall` with both `--query` and `--tag` now errors instead of silently ignoring `--tag`.
+- `status` on an empty registry prints the bootstrap/add hint that `commands/status.md` promised.
+- `kb_registry.__version__` was stuck at 0.2.0; now matches the plugin version.
+- README no longer claims `bin/kb` is added to PATH on install (contradicted the 0.5.0 entry).
+
+### Removed
+- `status --fetch` (documented but never implemented) and `search --include-inbox` (no-op; inbox is included by default, use `--exclude-inbox` to opt out).
+
 ## 0.5.0 — 2026-06-08
 
 ### Fixed

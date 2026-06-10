@@ -1098,6 +1098,19 @@ for skill in registry info remember stage recall retrospective; do
         echo "  FAIL  $skill SKILL.md frontmatter (expects name/description-template/version)"
     fi
 done
+# Version lockstep: plugin.json == marketplace.json entry == __version__.
+# An unbumped or drifted version ships stale code from the plugin cache.
+run "version lockstep (plugin.json, marketplace.json, __version__)" python3 -c "
+import json, sys
+sys.path.insert(0, 'plugins/kb/scripts')
+from kb_registry import __version__
+plugin = json.load(open('plugins/kb/.claude-plugin/plugin.json'))['version']
+market = next(p['version']
+              for p in json.load(open('.claude-plugin/marketplace.json'))['plugins']
+              if p['name'] == 'kb')
+assert plugin == market == __version__, (plugin, market, __version__)
+"
+
 # kb-dream agent frontmatter check.
 AGENT="plugins/kb/agents/kb-dream.md"
 if head -5 "$AGENT" | grep -q "^name: kb-dream$" \
