@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 -->
+
 # Validation — {N-slug}
 
 ## Scope
@@ -24,24 +26,47 @@
 - <exclusion 1, with the specific thing named>
 - <exclusion 2>
 
+**Removed:**
+<!--
+  OPTIONAL. For changes that delete things, enumerate them explicitly:
+  one line per deletion with a reason. Mirrors "Out of scope" but for
+  things that existed and now don't. Catches deletion intent the diff
+  alone doesn't justify. Skip this subsection if nothing is being removed.
+-->
+
+- <what's being deleted>: <one-line reason>
+
 ## Decisions (locked)
 
 <!--
-  Non-obvious calls made during framing. Numbered for reference. One line of
-  rationale each. If rationale is long, put it in impact.md or design.md and
-  link from here.
+  Non-obvious calls made during framing. Numbered as D-N so they can be
+  referenced from elsewhere (`per D-3`), from code (`# implements D-3`),
+  and from tests (`test_d3_*`). The number stays stable even if other
+  items renumber.
+
+  One line of rationale each. If rationale is long, put it in impact.md
+  or design.md and link from here.
 
   A locked decision is a commitment. If it starts to look wrong during
   execution, surface it to the user — don't flip silently.
+
+  For design.md-grade changes, see references/framing.md for the optional
+  3-column table form.
 -->
 
-1. **<decision>.** <one-line rationale>
-2. **<decision>.** <one-line rationale>
+- **D-1** — <decision>. <one-line rationale>
+- **D-2** — <decision>. <one-line rationale>
 
 ## Tests (automated)
 
 <!--
   One line per test, naming the file and the invariant it asserts.
+
+  Before locking this list, scan it through the three-question checklist
+  in references/failure-modes.md → Test proliferation. A change with 5
+  contract-pinning tests + 1 integration smoke is healthier than 15 tests
+  across the antipatterns named there (string-grep on artefacts,
+  shape-of-constant echoes, branching-by-mock-choreography).
 -->
 
 - `T1` — `<file>::<test>` — <invariant being asserted>

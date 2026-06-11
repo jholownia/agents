@@ -1,7 +1,7 @@
 ---
 name: spec-driven-execution
 description: This skill should be used when the user asks to "start a spec", "create a spec for X", "set up a spec folder", "plan this properly before coding", "break this work into changes", "archive this spec", "what's in active changes", or works on non-trivial tasks (architectural changes, cross-module refactors, GitHub issues with subtasks, work that spans multiple sessions) that benefit from durable explicit planning, design, and validation steps. Each change is captured in a self-contained folder with a mini-spec (description + validation + tasks) written before any code; archived folders double as the decision record. Skip for single-commit work or focused bug fixes.
-version: 0.1.2
+version: 0.2.0
 ---
 
 # Spec-Driven Execution
@@ -146,6 +146,13 @@ sub-items against the new deliverable**. Don't let a reframing absorb sub-items
 without naming each one. The conflation failure mode in
 [references/failure-modes.md](references/failure-modes.md) is exactly this.
 
+Before locking the tests list, also scan it through the three-question
+checklist in [references/failure-modes.md](references/failure-modes.md) →
+**Test proliferation**. Subagents authoring tests under tight scopes often
+produce substring-greps on artefacts, constant echoes that pin what `import`
+already enforces, or branching-by-mock-choreography — all of which look
+like coverage but pin implementation, not behaviour.
+
 ### Phase 6 — Archive
 
 Move `active/{N-slug}/` → `archive/{N-slug}/`. The archived folder is now the
@@ -206,6 +213,10 @@ is waste.
 - **One huge change folder.** If `tasks.md` is growing past ~30 items or
   `description.md` past ~150 lines, split. The scope grew; the folder should
   too, into siblings.
+- **Test proliferation.** Substring-greps on artefacts, constant echoes,
+  and branching-by-mock-choreography — the three shapes catalogued in
+  [references/failure-modes.md](references/failure-modes.md). Catch them
+  at Phase 5 before they enter the archived audit trail.
 
 ## Subagent patterns
 

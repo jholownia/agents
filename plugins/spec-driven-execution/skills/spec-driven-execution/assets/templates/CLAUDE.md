@@ -90,9 +90,14 @@ The contract the change must satisfy. Sections, in order:
   inclusions. Name the *specific* thing excluded; "out of scope" lines are
   load-bearing and must not silently cover sub-items that should be in scope.
 - **Decisions (locked)** — non-obvious calls made during Context/Frame, with
-  the reasoning in one line each. Numbered for reference. If rationale is
-  long, put it in `impact.md` or `design.md` and link.
+  the reasoning in one line each. Numbered as **D-1, D-2, …** for stable
+  reference from elsewhere in the spec, from code (`# implements D-3`),
+  and from tests (`test_d3_*`). If rationale is long, put it in
+  `impact.md` or `design.md` and link. Invariants in `design.md` follow
+  the same convention with **I-N**.
 - **Tests** — automated checks (new or modified). One line per test, named.
+  Before locking the list, scan it for the test-proliferation antipatterns
+  (see the anti-patterns section below).
 - **Manual checks** — commands to run, diffs to eyeball, data to verify. Numbered.
 - **Success criteria** — what must be true for the change to count as done.
 
@@ -144,3 +149,13 @@ changes.
 - Writing framing files after the code already exists.
 - Editing archived changes — they're frozen. Write a new change instead.
 - One folder growing past ~30 tasks or ~150 lines of description — split.
+- **Test proliferation.** Three shapes that look like coverage but are
+  drift: (1) `assert "..." in <doc/config/prompt>` (string-grep on
+  artefacts — passes even when the artefact is broken), (2) `assert
+  CONSTANT == "literal"` (re-asserts what `import` already enforces),
+  (3) N tests asserting which mock was called for N branches (the
+  contract is the action, not the dispatch — parametrise over
+  `(input, expected_action)` instead). Before locking the Tests list,
+  ask: would deleting this test leave any locked decision unverified?
+  Does it pin behaviour at a boundary, or a value in production code?
+  Could N of these collapse into one parametrised case?

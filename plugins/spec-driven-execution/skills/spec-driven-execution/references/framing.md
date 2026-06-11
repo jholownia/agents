@@ -55,11 +55,28 @@ is out of scope" — say "*DDL changes* to `<table>` are out of scope;
 
 Non-obvious calls made during framing, each with a one-line rationale.
 
-- Number them so they can be referenced from elsewhere (`per decision #3`).
+- Number them as **D-1, D-2, …** so they can be referenced from elsewhere
+  (`per D-3`), from code (`# implements D-3`), and from tests
+  (`test_d3_*`). The number stays stable even if other items renumber.
 - One line of rationale per decision. If the reasoning is long, put it in
   `impact.md` or `design.md` and link from here.
 - A locked decision is a commitment to a specific reading. If it starts to
   look wrong during execution, surface it to the user — don't flip silently.
+
+For changes with `design.md` (architectural weight), consider the 3-column
+table form — it forces resolution and rationale apart, makes each decision
+visible at a glance, and lets you mark "needs external input" directly in
+the Resolution cell:
+
+```markdown
+|#|Decision|Resolution|Rationale|
+|---|---|---|---|
+|D-1|Notification↔incident mult.|1:N, enforced by PK|No concrete N:M scenario exists.|
+|D-2|Equality predicate on relabel|Two-pass: same-label, then any|Recording old → new is better audit.|
+```
+
+Bullet form remains the lightweight default — use the table when the change
+already has enough weight to justify `design.md`.
 
 ### Tests (automated)
 
