@@ -20,7 +20,7 @@ All agent writes go to `inbox/` only.
 
 ## Plugin-reserved `.kb-internal/`
 
-`.kb-internal/` is plugin-managed maintenance state (currently the distill ledger). Excluded from `kb reindex`, `kb search`, and `kb recall` at the plugin code layer; agents and humans must not read or modify it by hand. The plugin self-installs `.kb-internal/.gitignore` on first write so distill record/prune do not dirty the KB working tree or block `kb sync` — ledger contents are not versioned, by design.
+`.kb-internal/` is plugin-managed (currently the distill ledger). Excluded from `kb reindex`, `kb search`, and `kb recall` at the plugin code layer; agents and humans must not read or modify it by hand. The ledger IS tracked by git — findings are durable consolidation output that must travel with the KB to downstream consumers; `kb-dream` commits it alongside canonical writes during apply. The deterministic `kb distill prune` runs inside the apply step (not pass start) so an aborted dream pass leaves a clean working tree. Earlier 0.7.0 KBs that self-installed a `.kb-internal/.gitignore` have it auto-removed on the next distill write.
 
 ## Binary and large files
 

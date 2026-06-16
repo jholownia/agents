@@ -207,22 +207,35 @@ def tombstone_path(kb_path):
     return os.path.join(distill_dir(kb_path), _TOMBSTONE_FILE)
 
 
+# Marker line used by the legacy (0.7.0) gitignore self-install. Recognising
+# our own marker lets the 0.7.1 self-uninstall be safe — we only remove a file
+# we wrote, never a user-authored .gitignore.
+_LEGACY_GITIGNORE_MARKER = "# Plugin-managed maintenance state — see kb plugin."
+
+
 def ensure_distill_dir(kb_path):
     """Create the `.kb-internal/distill/` directory if missing.
 
-    Also self-installs a `.kb-internal/.gitignore` that excludes everything
-    inside the namespace from the KB's git tree. The ledger is plugin-managed
-    maintenance state — record/prune writes must not dirty the KB repo or
-    block `kb sync`, and the rolling TTL retention means git versioning would
-    be churn for no benefit. Idempotent: the gitignore is written only when
-    missing, so user-edited content (e.g. exempt rules) is preserved.
+    The ledger is durable consolidation output, not local maintenance state —
+    it must travel with the KB repo so downstream consumers (WARDEN, other
+    clones) see the findings. So nothing is gitignored. If a legacy 0.7.0
+    `.kb-internal/.gitignore` exists with our marker line, remove it as a
+    one-shot migration; a user-authored gitignore (without the marker) is
+    left alone.
     """
     os.makedirs(distill_dir(kb_path), exist_ok=True)
     gitignore_path = os.path.join(kb_path, ".kb-internal", ".gitignore")
-    if not os.path.exists(gitignore_path):
-        with open(gitignore_path, "w") as f:
-            f.write("# Plugin-managed maintenance state — see kb plugin.\n")
-            f.write("*\n")
+    if os.path.exists(gitignore_path):
+        try:
+            with open(gitignore_path, "r", encoding="utf-8") as f:
+                head = f.readline().rstrip("\n")
+        except OSError:
+            return
+        if head == _LEGACY_GITIGNORE_MARKER:
+            try:
+                os.remove(gitignore_path)
+            except OSError:
+                pass
 
 
 def _serialise_record(record):

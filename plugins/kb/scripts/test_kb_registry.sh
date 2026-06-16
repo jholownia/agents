@@ -1450,29 +1450,54 @@ run "T11 accept aware detected_at (+HH:MM offset)" \
     $KB --config "$CONFIG" distill record tz --data \
     '{"track":"divergent","type":"open-question","source":"k/y.md#b","statement":"q","suggested_action":"needs-clarification","detected_at":"2026-06-16T14:00:00+02:00"}'
 
-# T12 — `.kb-internal/` self-installs a gitignore; KB repo stays clean across
-# record + prune. Plugin-managed maintenance state must not block `kb sync`
-# or violate kb-dream's dry-run-first contract by leaving the repo dirty.
+# T12 — Distill ledger is tracked by git (durable consolidation output, not
+# local maintenance state). After `kb distill record`, the ledger appears in
+# git status as untracked-but-eligible. NO `.kb-internal/.gitignore` is
+# installed. Legacy 0.7.0 gitignores with our marker self-uninstall on next
+# write so existing KBs converge cleanly.
 GI_KB=$TMPDIR/gi-kb
 $KB --config "$CONFIG" bootstrap gi --path "$GI_KB" >/dev/null
 $KB --config "$CONFIG" distill record gi --data "$AWARE_REC" >/dev/null
-if [ -f "$GI_KB/.kb-internal/.gitignore" ]; then
-    PASS=$((PASS+1)); echo "  PASS  T12 .kb-internal/.gitignore self-installed on first record"
+if [ ! -f "$GI_KB/.kb-internal/.gitignore" ]; then
+    PASS=$((PASS+1)); echo "  PASS  T12 no .kb-internal/.gitignore installed on first record"
 else
-    FAIL=$((FAIL+1)); echo "  FAIL  T12 .kb-internal/.gitignore missing after record"
+    FAIL=$((FAIL+1)); echo "  FAIL  T12 .kb-internal/.gitignore appeared after record"
 fi
-GI_DIRTY=$(git -C "$GI_KB" status --porcelain 2>/dev/null | grep -c "\.kb-internal" || true)
-if [ "$GI_DIRTY" -eq 0 ]; then
-    PASS=$((PASS+1)); echo "  PASS  T12 .kb-internal/ does not dirty the KB repo after record"
+LEDGER_VISIBLE=$(git -C "$GI_KB" status --porcelain --untracked-files=all 2>/dev/null | grep -c "\.kb-internal/distill/findings.ndjson" || true)
+if [ "$LEDGER_VISIBLE" -ge 1 ]; then
+    PASS=$((PASS+1)); echo "  PASS  T12 findings.ndjson visible to git (durable, not gitignored)"
 else
-    FAIL=$((FAIL+1)); echo "  FAIL  T12 .kb-internal/ appeared in git status: $GI_DIRTY entries"
+    FAIL=$((FAIL+1)); echo "  FAIL  T12 findings.ndjson hidden from git status"
 fi
-$KB --config "$CONFIG" distill prune gi --ttl-days 1 >/dev/null
-GI_DIRTY_AFTER_PRUNE=$(git -C "$GI_KB" status --porcelain 2>/dev/null | grep -c "\.kb-internal" || true)
-if [ "$GI_DIRTY_AFTER_PRUNE" -eq 0 ]; then
-    PASS=$((PASS+1)); echo "  PASS  T12 .kb-internal/ does not dirty the KB repo after prune"
+# Also confirm `git check-ignore` does NOT mark the ledger as ignored.
+if ! git -C "$GI_KB" check-ignore -q .kb-internal/distill/findings.ndjson 2>/dev/null; then
+    PASS=$((PASS+1)); echo "  PASS  T12 git check-ignore confirms ledger is not ignored"
 else
-    FAIL=$((FAIL+1)); echo "  FAIL  T12 prune left .kb-internal/ dirty: $GI_DIRTY_AFTER_PRUNE entries"
+    FAIL=$((FAIL+1)); echo "  FAIL  T12 git check-ignore reports ledger as ignored"
+fi
+# Legacy gitignore (0.7.0 shape with marker) is self-uninstalled on next write
+# so KBs that ran under 0.7.0 stop hiding the ledger after upgrade.
+LEGACY_KB=$TMPDIR/legacy-gi-kb
+$KB --config "$CONFIG" bootstrap legacy --path "$LEGACY_KB" >/dev/null
+mkdir -p "$LEGACY_KB/.kb-internal"
+printf '# Plugin-managed maintenance state — see kb plugin.\n*\n' > "$LEGACY_KB/.kb-internal/.gitignore"
+$KB --config "$CONFIG" distill record legacy --data "$AWARE_REC" >/dev/null
+if [ ! -f "$LEGACY_KB/.kb-internal/.gitignore" ]; then
+    PASS=$((PASS+1)); echo "  PASS  T12 legacy 0.7.0 gitignore self-uninstalled on next record"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T12 legacy 0.7.0 gitignore survived (would hide ledger from git)"
+fi
+# A user-authored .kb-internal/.gitignore (no marker) must NOT be removed —
+# we only own the marker shape.
+USER_KB=$TMPDIR/user-gi-kb
+$KB --config "$CONFIG" bootstrap usergi --path "$USER_KB" >/dev/null
+mkdir -p "$USER_KB/.kb-internal"
+printf '# user-authored — do not touch\nsome-private-file\n' > "$USER_KB/.kb-internal/.gitignore"
+$KB --config "$CONFIG" distill record usergi --data "$AWARE_REC" >/dev/null
+if [ -f "$USER_KB/.kb-internal/.gitignore" ] && grep -q "user-authored" "$USER_KB/.kb-internal/.gitignore"; then
+    PASS=$((PASS+1)); echo "  PASS  T12 user-authored .kb-internal/.gitignore preserved"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T12 user-authored .kb-internal/.gitignore was modified or removed"
 fi
 
 # T13 — JSON-mode surface always emits valid JSON. Empty ledger AND
