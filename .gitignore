@@ -4,6 +4,9 @@
 # Local planning/research context
 .context/
 
+# spec-driven-execution working space (personal, not committed)
+.changes/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

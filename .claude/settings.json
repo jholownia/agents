@@ -1,7 +1,8 @@
 {
   "enabledPlugins": {
     "plugin-dev@claude-plugins-official": true,
-    "kb@agents": true
+    "kb@agents": true,
+    "spec-driven-execution@agents": true
   },
   "extraKnownMarketplaces": {
     "agents": {
