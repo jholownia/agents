@@ -50,9 +50,13 @@ def _search_rg(path, query, max_results=20, glob_pattern=None,
                exclude_inbox=False):
     """Search using ripgrep. Returns list of result dicts."""
     # --fixed-strings matches the Python fallback's re.escape semantics;
+    # --smart-case mirrors the fallback's re.IGNORECASE (lowercase → case
+    # insensitive, mixed-case → case sensitive); rg's default is fully
+    # case-sensitive, which diverged from the fallback and missed hits on
+    # capitalised titles like "Defensive validation" for a lowercase query.
     # -e keeps dash-prefixed queries from being parsed as rg flags.
     args = [
-        "rg", "--json", "--fixed-strings",
+        "rg", "--json", "--fixed-strings", "--smart-case",
         "--max-count", str(_DEFAULT_MAX_PER_FILE),
         "--glob", "!.git",
         # I-5: .kb-internal/ is plugin-managed, never searched.

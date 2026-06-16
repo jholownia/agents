@@ -493,6 +493,29 @@ else
     echo "  FAIL  search missed dash-prefixed query: $DASH_OUT"
 fi
 
+# Smart-case: lowercase queries match capitalised text (rg's default would
+# diverge from the Python fallback's re.IGNORECASE here). Surfaced during
+# kb 0.7.0 dogfooding when searching for "defensive validation" missed the
+# canonical page titled "Defensive validation patterns".
+$KB --config "$CONFIG" stage test --note "MixedCase Probe entry here" >/dev/null 2>&1
+SMART_LOWER=$($KB --config "$CONFIG" search test "mixedcase probe" 2>&1)
+if echo "$SMART_LOWER" | grep -q "MixedCase Probe"; then
+    PASS=$((PASS+1))
+    echo "  PASS  search lowercase query hits capitalised text (smart-case)"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  search missed capitalised text on lowercase query: $SMART_LOWER"
+fi
+# All-uppercase query stays case-sensitive (smart-case half).
+SMART_UPPER=$($KB --config "$CONFIG" search test "MIXEDCASE PROBE" 2>&1)
+if echo "$SMART_UPPER" | grep -q "No results"; then
+    PASS=$((PASS+1))
+    echo "  PASS  search uppercase query stays case-sensitive (smart-case)"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  smart-case broken — uppercase query matched anyway: $SMART_UPPER"
+fi
+
 echo ""
 echo "--- 6b. Remember + Recall ---"
 run "remember emma fact" $KB --config "$CONFIG" remember "EMMA's nightly job runs at 02:00 UTC via cron." --tags emma,runbook
