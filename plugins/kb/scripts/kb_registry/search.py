@@ -55,6 +55,8 @@ def _search_rg(path, query, max_results=20, glob_pattern=None,
         "rg", "--json", "--fixed-strings",
         "--max-count", str(_DEFAULT_MAX_PER_FILE),
         "--glob", "!.git",
+        # I-5: .kb-internal/ is plugin-managed, never searched.
+        "--glob", "!.kb-internal/",
     ]
     if exclude_inbox:
         args += ["--glob", "!inbox/"]
@@ -109,6 +111,9 @@ def _search_python(path, query, max_results=20, glob_pattern=None,
         # Skip .git
         if ".git" in dirnames:
             dirnames.remove(".git")
+        # I-5: .kb-internal/ is plugin-managed, never searched.
+        if ".kb-internal" in dirnames:
+            dirnames.remove(".kb-internal")
         rel_dir = os.path.relpath(dirpath, path)
         if exclude_inbox and (rel_dir == "inbox" or rel_dir.startswith(
                 "inbox" + os.sep)):

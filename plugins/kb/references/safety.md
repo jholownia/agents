@@ -18,6 +18,10 @@ Agents must still treat "do not stage secrets" as a rule (see `AGENTS.md` in eac
 v0 does not write to `knowledge/` except during template creation.
 All agent writes go to `inbox/` only.
 
+## Plugin-reserved `.kb-internal/`
+
+`.kb-internal/` is plugin-managed maintenance state (currently the distill ledger). Excluded from `kb reindex`, `kb search`, and `kb recall` at the plugin code layer; agents and humans must not read or modify it by hand. The plugin self-installs `.kb-internal/.gitignore` on first write so distill record/prune do not dirty the KB working tree or block `kb sync` — ledger contents are not versioned, by design.
+
 ## Binary and large files
 
 - Plain binary files are rejected for staging.

@@ -1,6 +1,19 @@
-<!-- markdownlint-disable MD024 MD032 -->
+<!-- markdownlint-disable MD022 MD024 MD032 -->
 
 # Changelog
+
+## 0.7.0 — 2026-06-16
+
+### Added
+- `kb distill` primitive: typed-finding ledger that the `kb-dream` agent emits during consolidation. The plugin owns detection at consolidation time, immutable append-only storage, hash-based dedup, and TTL-based retention; consumers (WARDEN, humans, future plugins) read the ledger and route findings downstream. "Addressed" state is consumer-side, not plugin-side.
+- Three new CLI verbs: `kb distill record <kb> [--data | --data-file]` (schema-validated typed-finding ingest, idempotent on hash collision; stdin is the fallback when neither flag is supplied), `kb distill surface <kb> [--type] [--track] [--since] [--format]` (read-only filtered surface), `kb distill prune <kb> [--ttl-days N]` (default 90 days; also auto-runs at kb-dream pass start).
+- Six v0 finding types in two tracks. **Convergent** (candidates for procedural artifacts): `failure-mode`, `resolution-path`, `heuristic`. **Divergent** (candidates for follow-up / triage): `open-question`, `contradiction`, `incomplete`. Schema-validated at the `record` boundary; unknown types reject. Adding new types is a minor bump; removing/renaming is breaking.
+- Append-only ndjson ledger at `.kb-internal/distill/findings.ndjson`. Pruned-hash tombstone at `.kb-internal/distill/pruned-hashes.ndjson` (never pruned itself; stores hashes only; flips `recurrence_after_retention: true` on re-detection of a previously-pruned finding).
+- Hash is `sha256(type + ":" + source)` where `source` is `<path>#<slug>` and the slug is the plugin's deterministic normalisation of heading text (lowercase, whitespace → `-`, strip punctuation — GitHub-anchor convention). Statement, context, and `subkey` are human-readable body but NOT part of the hash.
+- `kb-dream` agent prompt extended: step 3b identifies distill findings; the Dream Plan template gains a `### Distill Findings` section; step 5 (Apply) invokes `kb distill record` alongside canonical writes. Emission is gated on Apply approval like any other canonical write. Auto-prune at pass start runs unconditionally (deterministic TTL, no semantic judgement — exempt from the dry-run gate).
+- `.kb-internal/` is a plugin-reserved namespace. `kb reindex`, `kb search`, and `kb recall` exclude it at the plugin code layer (not per-KB convention). The plugin also self-installs `.kb-internal/.gitignore` on first write so distill record/prune never dirty the KB git tree — ledger contents are TTL-bounded maintenance state, not versioned knowledge.
+- `detected_at` requires an explicit timezone suffix (`Z` or `±HH:MM`); validation rejects naive timestamps at the record boundary. Defence-in-depth normalisation at prune/surface parse sites against legacy entries.
+- `kb distill surface --format json` always emits valid JSON (`[]` when empty). Text mode keeps the "doing nothing is success" empty-stdout contract.
 
 ## 0.6.0 — 2026-06-10
 

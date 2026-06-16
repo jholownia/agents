@@ -24,6 +24,10 @@ Every knowledge base must contain:
 - `notes/` — **append-only**, never consolidated. Short single-paragraph facts written by `${CLAUDE_PLUGIN_ROOT}/bin/kb remember`. `kb-dream` never touches this directory.
 - `knowledge/` — seed section for synthesised long-form pages. Agents may add other top-level canonical sections (`runbooks/`, `decisions/`, `specs/`, etc.) when the KB calls for it.
 
+### Plugin-reserved namespace: `.kb-internal/`
+
+The `.kb-internal/` directory at the KB root is plugin-managed maintenance state — agents and humans must not read or modify it by hand. Currently used for the distill ledger (`.kb-internal/distill/findings.ndjson` and `.kb-internal/distill/pruned-hashes.ndjson`). Excluded from `kb reindex`, `kb search`, and `kb recall` at the plugin code layer (not a per-KB AGENTS.md convention — single source of exclusion truth). The plugin also self-installs `.kb-internal/.gitignore` (containing `*`) on first write so distill record/prune do not dirty the KB git tree — ledger contents are bounded by TTL and re-derived by the next dream pass, so dropping git history is intentional. Future plugin-internal state may live here under additional subdirectories without disturbing this contract.
+
 ### Three-layer scoping (what goes where)
 
 Routing across Claude's auto-memory, project `CLAUDE.md` / `AGENTS.md`, and the KB is documented in [scoping.md](scoping.md). The axis is durable fact vs ephemeral state, not "personal vs project". See that file for the full table, litmus test, and personal-vs-project KB routing.

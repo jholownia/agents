@@ -40,6 +40,10 @@ Three Claude Code surfaces over a shared `kb` CLI:
 
 Skills are auto-triggered by sharp language patterns (see each `SKILL.md`'s `description:`). Commands give the user explicit `/`-typed entry points for the registry lifecycle. The agent handles consolidation because it's a multi-step judgment workflow, not a one-shot operation.
 
+## Distill
+
+`kb distill` is a typed-finding primitive emitted by `kb-dream` during consolidation, designed to compound accumulated knowledge into actionable improvements. The plugin owns detection at consolidation time, an immutable append-only ledger, hash-based dedup, and TTL-based retention (default 90 days). It deliberately does not track "addressed" state — consumers (WARDEN, humans, future plugins) read the ledger via `kb distill surface`, route findings downstream (file issues, draft skills, propose `CLAUDE.md` nudges), and track their own progress. Storage lives under `.kb-internal/distill/` — a plugin-reserved namespace excluded from `kb reindex`, `kb search`, and `kb recall`. Six v0 finding types span two tracks: convergent (`failure-mode`, `resolution-path`, `heuristic` — candidates for procedural artifacts) and divergent (`open-question`, `contradiction`, `incomplete` — candidates for follow-up).
+
 ## Three-layer scoping
 
 The KB is *one* of three persistence layers — alongside Claude's auto-memory and project `CLAUDE.md` / `AGENTS.md`. The axis is **durable fact vs ephemeral state**, not "personal vs project". Quick summary:

@@ -58,6 +58,11 @@ Inbox material is source code. Canonical pages (under `knowledge/` and any other
 ### 1. Orient
 
 ```bash
+# Plugin-managed maintenance — runs unconditionally before the dry-run plan.
+# .kb-internal/ is plugin-owned state; pruning it is deterministic (TTL
+# window) and is NOT gated on user approval.
+${CLAUDE_PLUGIN_ROOT}/bin/kb distill prune <kb>
+
 ${CLAUDE_PLUGIN_ROOT}/bin/kb list
 ${CLAUDE_PLUGIN_ROOT}/bin/kb brief <kb>
 ${CLAUDE_PLUGIN_ROOT}/bin/kb status <kb>
@@ -73,6 +78,8 @@ LOG.md
 knowledge/  (and any other indexable sections)
 inbox/
 ```
+
+**Never read or modify `.kb-internal/`** by hand. It is the plugin-managed namespace for the distill ledger (see step 3b). Interact with it only through `kb distill *` verbs. `kb reindex`, `kb search`, and `kb recall` already exclude it.
 
 If `AGENTS.md`, `BRIEF.md`, and the existing structure disagree, prefer `AGENTS.md` and surface the mismatch in the dry-run plan.
 
@@ -122,6 +129,36 @@ Canonical pages age into incorrectness, not just incompleteness — "migrating t
 
 For each aged fact, propose a revision in the dry-run plan's **Temporal Revisions** section. Rewrite to past tense only when the outcome is known from inbox material or the page itself; when the outcome is unknown, flag the claim as unverified rather than inventing a resolution. These revisions ride the same dry-run gate as new-fact consolidation — never apply them unreviewed.
 
+### 3b. Identify distill findings
+
+A dream pass produces a second class of output beyond canonical edits: **typed findings** — durable observations about gaps, contradictions, recurring failure modes, and rules that should compound across passes. These go into an append-only ledger consumed downstream (issue filing, skill drafting, CLAUDE.md nudges).
+
+First, surface the existing ledger so you can recognise updates vs new findings:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/bin/kb distill surface <kb> --format json
+```
+
+While reading inbox and canonical material, look for findings in two tracks. Six types, schema-validated at record time:
+
+**Convergent — candidates for procedural artifacts or promotion to working knowledge:**
+
+- `failure-mode` — self-corrected or user-corrected agent errors (highest value; candidate for CLAUDE.md nudge, new skill, or harness update).
+- `resolution-path` — optimal steps or formula for accomplishing a task.
+- `heuristic` — recurring rule or shortcut for navigating the system.
+
+**Divergent — candidates for follow-up / triage / resolution:**
+
+- `open-question` — needs answer, clarification, or follow-up discussion.
+- `contradiction` — needs resolution. **Only counts when the new knowledge does NOT cleanly supersede the existing one.** Temporal updates (API change, design change, supersession entries you've already added in step 3a) are *not* contradictions — those belong in Temporal Revisions. A real contradiction is concurrent inconsistency, e.g. "be brief" vs "be elaborate" in agent instructions, or "use filesystem" vs "use database" describing the same system's storage layer.
+- `incomplete` — sparse, shallow, or vague knowledge warranting investigation.
+
+**Track is structurally implied by type.** A finding's `track` field must match: `failure-mode`/`resolution-path`/`heuristic` ⇒ `convergent`; `open-question`/`contradiction`/`incomplete` ⇒ `divergent`. The record verb rejects mismatched pairs.
+
+**Identity is hashed on `(type, source)`.** `source` is `<path>#<heading-anchor>` — typically a canonical page section. The same `(type, source)` deduplicates as one entry. If a single section yields multiple distinct findings of the same type, the right response is to structure canonical content so each lives in its own anchor (distinct heading → distinct hash) — not to invent disambiguators. List candidate findings in the dry-run plan; check each against the surfaced ledger above so you only propose entries with no matching `(type, source)` already on file.
+
+Findings are emitted to the ledger in step 5 (Apply), behind the same approval gate as canonical edits.
+
 ### 4. Propose a dry run
 
 Use this output shape:
@@ -152,6 +189,12 @@ Use this output shape:
 ### Open Questions
 
 - Decide whether command semantics belong under `knowledge/design/` or `knowledge/reference/`.
+
+### Distill Findings
+
+- `divergent / open-question` at `knowledge/design/example.md#cache-strategy` — "Should the cache be LRU or LFU?" (suggested_action: needs-clarification)
+- `convergent / failure-mode` at `knowledge/runbooks/deploy.md#rollback` — "Agent forgets to clear CDN cache after rollback" (suggested_action: promote-to-claude-md)
+- `divergent / incomplete` at `knowledge/api/auth.md#token-rotation` — "Section names the rotation cadence but not the failure path" (suggested_action: needs-investigation)
 ```
 
 Stop here unless the user explicitly asked to apply directly.
@@ -168,6 +211,21 @@ When approved, edit the KB directly:
 - When a new note contradicts an existing canonical claim, **replace the old claim** and append a supersession entry to `LOG.md` listing both the consumed inbox note and the prior canonical claim. Interference, not silent rewrite.
 - Append a short entry to `LOG.md` summarising what was consumed.
 - Mark consumed inbox notes as processed or move them under `inbox/processed/`.
+- Emit each approved distill finding from the Dream Plan via `kb distill record`. The plugin computes the hash, the tombstone-based `recurrence_after_retention` flag, and the anchor normalisation; you supply the typed payload:
+
+  ```bash
+  ${CLAUDE_PLUGIN_ROOT}/bin/kb distill record <kb> --data '{
+    "track": "divergent",
+    "type": "open-question",
+    "source": "knowledge/design/example.md#Cache Strategy",
+    "statement": "Should the cache be LRU or LFU?",
+    "context": "Two notes assume different policies; inbox/2026/06/cache-survey.md says LRU, knowledge/design/example.md current section is ambiguous.",
+    "suggested_action": "needs-clarification",
+    "detected_at": "2026-06-16T12:00:00Z"
+  }'
+  ```
+
+  Same `(type, source)` deduplicates silently (no error). A finding whose hash is in the tombstone returns with `recurrence_after_retention: true` set automatically.
 
 Use the KB's own conventions if they differ from this default.
 

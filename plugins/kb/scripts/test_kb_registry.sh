@@ -1124,6 +1124,355 @@ else
 fi
 
 echo ""
+echo "--- 15. Distill ---"
+# Helper: emit a finding JSON payload on stdout.
+# Args: track type source statement suggested_action detected_at [subkey]
+distill_payload() {
+    local track="$1" type="$2" source="$3" statement="$4" action="$5" detected_at="$6" subkey="${7:-}"
+    python3 -c "
+import json, sys
+rec = {
+    'track': sys.argv[1],
+    'type': sys.argv[2],
+    'source': sys.argv[3],
+    'statement': sys.argv[4],
+    'suggested_action': sys.argv[5],
+    'detected_at': sys.argv[6],
+    'recurrence_after_retention': False,
+}
+if len(sys.argv) > 7 and sys.argv[7]:
+    rec['subkey'] = sys.argv[7]
+print(json.dumps(rec))
+" "$track" "$type" "$source" "$statement" "$action" "$detected_at" "$subkey"
+}
+
+# --- T1: record valid finding (all six types, both tracks) ---
+# Fresh sub-fixture so dedup/prune semantics aren't perturbed by neighbours.
+DISTILL_KB="$TMPDIR/distill-kb"
+$KB --config "$CONFIG" bootstrap distill --path "$DISTILL_KB" >/dev/null 2>&1
+DISTILL_LEDGER="$DISTILL_KB/.kb-internal/distill/findings.ndjson"
+
+NOW="2026-06-16T12:00:00Z"
+# Six records: three convergent + three divergent, one per v0 type.
+$KB --config "$CONFIG" distill record distill --data "$(distill_payload convergent failure-mode    'knowledge/a.md#x1' 'fm stmt' promote-to-claude-md "$NOW")" >/dev/null
+$KB --config "$CONFIG" distill record distill --data "$(distill_payload convergent resolution-path 'knowledge/a.md#x2' 'rp stmt' promote-to-skill    "$NOW")" >/dev/null
+$KB --config "$CONFIG" distill record distill --data "$(distill_payload convergent heuristic       'knowledge/a.md#x3' 'h  stmt' harness-update       "$NOW")" >/dev/null
+$KB --config "$CONFIG" distill record distill --data "$(distill_payload divergent  open-question   'knowledge/a.md#x4' 'oq stmt' needs-clarification  "$NOW")" >/dev/null
+$KB --config "$CONFIG" distill record distill --data "$(distill_payload divergent  contradiction   'knowledge/a.md#x5' 'co stmt' needs-resolution     "$NOW")" >/dev/null
+$KB --config "$CONFIG" distill record distill --data "$(distill_payload divergent  incomplete      'knowledge/a.md#x6' 'in stmt' needs-investigation  "$NOW")" >/dev/null
+
+run "T1 findings.ndjson exists" test -f "$DISTILL_LEDGER"
+LINE_COUNT=$(wc -l < "$DISTILL_LEDGER" | tr -d ' ')
+if [ "$LINE_COUNT" -eq 6 ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  T1 ledger has 6 entries (one per v0 type)"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T1 expected 6 entries, got $LINE_COUNT"
+fi
+# Every line is valid JSON and every record has a non-empty hash + all required fields.
+if python3 -c "
+import json
+required = {'track','type','source','statement','suggested_action','detected_at','hash','recurrence_after_retention'}
+types_seen = set()
+tracks_seen = set()
+with open('$DISTILL_LEDGER') as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        rec = json.loads(line)
+        assert required.issubset(rec.keys()), rec
+        assert isinstance(rec['hash'], str) and rec['hash'], rec
+        types_seen.add(rec['type'])
+        tracks_seen.add(rec['track'])
+assert types_seen == {'failure-mode','resolution-path','heuristic','open-question','contradiction','incomplete'}, types_seen
+assert tracks_seen == {'convergent','divergent'}, tracks_seen
+" 2>/dev/null; then
+    PASS=$((PASS+1))
+    echo "  PASS  T1 every entry valid JSON with schema fields + hash, all 6 types + 2 tracks present"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T1 ledger schema/hash/type-coverage check failed"
+fi
+
+# --- T2: dedup on (type, source) ---
+# Use a fresh KB so we can count cleanly.
+DEDUP_KB="$TMPDIR/distill-dedup-kb"
+$KB --config "$CONFIG" bootstrap dedup --path "$DEDUP_KB" >/dev/null 2>&1
+DEDUP_LEDGER="$DEDUP_KB/.kb-internal/distill/findings.ndjson"
+
+# First record: prose A.
+$KB --config "$CONFIG" distill record dedup --data "$(distill_payload convergent failure-mode 'knowledge/b.md#Cache Strategy' 'first prose' promote-to-claude-md "$NOW" subkeyA)" >/dev/null
+# Second record: same (type, source) but different statement/context/subkey AND
+# different casing on the anchor — must normalise to the same hash and dedup.
+DUP_OUT=$($KB --config "$CONFIG" distill record dedup --data "$(distill_payload convergent failure-mode 'knowledge/b.md#cache-strategy' 'second prose drift' promote-to-claude-md "$NOW" subkeyB)" 2>&1)
+DUP_RC=$?
+if [ "$DUP_RC" -eq 0 ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  T2 dedup call exits 0 (silent no-op)"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T2 dedup call exited $DUP_RC, expected 0"
+fi
+if echo "$DUP_OUT" | grep -q "hash already in ledger"; then
+    PASS=$((PASS+1))
+    echo "  PASS  T2 dedup emits observability message on stderr"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T2 missing 'hash already in ledger' notice (got: $DUP_OUT)"
+fi
+DEDUP_LINES=$(wc -l < "$DEDUP_LEDGER" | tr -d ' ')
+if [ "$DEDUP_LINES" -eq 1 ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  T2 same (type, source) under prose+casing drift → 1 entry"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T2 expected 1 entry after dedup, got $DEDUP_LINES"
+fi
+
+# --- T3: reject unknown type, unknown track, or track/type mismatch ---
+# Unknown type.
+BAD_TYPE='{"track":"convergent","type":"bogus","source":"knowledge/c.md#x","statement":"x","suggested_action":"promote-to-claude-md","detected_at":"2026-06-16T12:00:00Z","recurrence_after_retention":false}'
+BEFORE_LINES=$(wc -l < "$DEDUP_LEDGER" | tr -d ' ')
+run_fail 2 "T3 reject unknown type" $KB --config "$CONFIG" distill record dedup --data "$BAD_TYPE"
+AFTER_LINES=$(wc -l < "$DEDUP_LEDGER" | tr -d ' ')
+if [ "$BEFORE_LINES" = "$AFTER_LINES" ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  T3 unknown type does not append to ledger"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T3 unknown type appended ($BEFORE_LINES → $AFTER_LINES)"
+fi
+# Unknown track.
+BAD_TRACK='{"track":"weird","type":"failure-mode","source":"knowledge/c.md#y","statement":"x","suggested_action":"promote-to-claude-md","detected_at":"2026-06-16T12:00:00Z","recurrence_after_retention":false}'
+run_fail 2 "T3 reject unknown track" $KB --config "$CONFIG" distill record dedup --data "$BAD_TRACK"
+# Mismatched pair.
+BAD_PAIR='{"track":"convergent","type":"open-question","source":"knowledge/c.md#z","statement":"x","suggested_action":"needs-clarification","detected_at":"2026-06-16T12:00:00Z","recurrence_after_retention":false}'
+run_fail 2 "T3 reject track/type mismatch (convergent + open-question)" $KB --config "$CONFIG" distill record dedup --data "$BAD_PAIR"
+FINAL_LINES=$(wc -l < "$DEDUP_LEDGER" | tr -d ' ')
+if [ "$FINAL_LINES" = "$BEFORE_LINES" ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  T3 no rejected record reaches the ledger"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T3 ledger grew after rejections ($BEFORE_LINES → $FINAL_LINES)"
+fi
+
+# --- T4: surface filters ---
+# Reuse the 6-entry $DISTILL_KB from T1 (one per type, three per track).
+count_surface() {
+    local result
+    result=$($KB --config "$CONFIG" distill surface distill --format json "$@" 2>/dev/null)
+    if [ -z "$result" ]; then
+        echo 0
+    else
+        echo "$result" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))"
+    fi
+}
+T4_TYPE_FM=$(count_surface --type failure-mode)
+T4_TYPE_OQ=$(count_surface --type open-question)
+T4_TRACK_C=$(count_surface --track convergent)
+T4_TRACK_D=$(count_surface --track divergent)
+T4_SINCE_FUTURE=$(count_surface --since 2099-01-01T00:00:00Z)
+T4_SINCE_PAST=$(count_surface --since 2000-01-01T00:00:00Z)
+
+if [ "$T4_TYPE_FM" -eq 1 ]; then
+    PASS=$((PASS+1)); echo "  PASS  T4 --type failure-mode returns 1"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T4 --type failure-mode expected 1, got $T4_TYPE_FM"
+fi
+if [ "$T4_TYPE_OQ" -eq 1 ]; then
+    PASS=$((PASS+1)); echo "  PASS  T4 --type open-question returns 1"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T4 --type open-question expected 1, got $T4_TYPE_OQ"
+fi
+if [ "$T4_TRACK_C" -eq 3 ]; then
+    PASS=$((PASS+1)); echo "  PASS  T4 --track convergent returns 3"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T4 --track convergent expected 3, got $T4_TRACK_C"
+fi
+if [ "$T4_TRACK_D" -eq 3 ]; then
+    PASS=$((PASS+1)); echo "  PASS  T4 --track divergent returns 3"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T4 --track divergent expected 3, got $T4_TRACK_D"
+fi
+if [ "$T4_SINCE_FUTURE" -eq 0 ]; then
+    PASS=$((PASS+1)); echo "  PASS  T4 --since <future> returns 0"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T4 --since <future> expected 0, got $T4_SINCE_FUTURE"
+fi
+if [ "$T4_SINCE_PAST" -eq 6 ]; then
+    PASS=$((PASS+1)); echo "  PASS  T4 --since <past> returns all 6"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T4 --since <past> expected 6, got $T4_SINCE_PAST"
+fi
+
+# --- T5: prune removes entries older than TTL ---
+PRUNE_KB="$TMPDIR/distill-prune-kb"
+$KB --config "$CONFIG" bootstrap prune --path "$PRUNE_KB" >/dev/null 2>&1
+PRUNE_LEDGER="$PRUNE_KB/.kb-internal/distill/findings.ndjson"
+PRUNE_TOMB="$PRUNE_KB/.kb-internal/distill/pruned-hashes.ndjson"
+
+NOW_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+OLD_TS="2024-01-01T00:00:00Z"
+# One backdated, one fresh — distinct (type, source) so they get distinct hashes.
+$KB --config "$CONFIG" distill record prune --data "$(distill_payload convergent failure-mode 'knowledge/p.md#old' 'old finding' promote-to-claude-md "$OLD_TS")" >/dev/null
+$KB --config "$CONFIG" distill record prune --data "$(distill_payload convergent failure-mode 'knowledge/p.md#new' 'new finding' promote-to-claude-md "$NOW_TS")" >/dev/null
+# Capture the old hash for T5/T6 cross-checks.
+OLD_HASH=$(python3 -c "
+import hashlib
+print(hashlib.sha256(('failure-mode:knowledge/p.md#old').encode()).hexdigest())
+")
+$KB --config "$CONFIG" distill prune prune --ttl-days 30 >/dev/null
+PRUNE_LINES=$(wc -l < "$PRUNE_LEDGER" | tr -d ' ')
+if [ "$PRUNE_LINES" -eq 1 ]; then
+    PASS=$((PASS+1))
+    echo "  PASS  T5 prune leaves 1 entry (backdated removed)"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T5 expected 1 entry after prune, got $PRUNE_LINES"
+fi
+if ! grep -q '#old' "$PRUNE_LEDGER"; then
+    PASS=$((PASS+1))
+    echo "  PASS  T5 backdated entry gone from ledger"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T5 backdated entry still in ledger"
+fi
+if grep -q '#new' "$PRUNE_LEDGER"; then
+    PASS=$((PASS+1))
+    echo "  PASS  T5 fresh entry retained"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T5 fresh entry was dropped"
+fi
+if [ -f "$PRUNE_TOMB" ] && grep -q "$OLD_HASH" "$PRUNE_TOMB"; then
+    PASS=$((PASS+1))
+    echo "  PASS  T5 pruned hash appears in pruned-hashes.ndjson"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T5 pruned hash missing from tombstone"
+fi
+
+# --- T6: recurrence_after_retention on re-record after tombstone ---
+# Re-record the previously-pruned (type, source) with a fresh detected_at.
+$KB --config "$CONFIG" distill record prune --data "$(distill_payload convergent failure-mode 'knowledge/p.md#old' 'old finding returns' promote-to-claude-md "$NOW_TS")" >/dev/null
+if python3 -c "
+import json
+target_hash = '$OLD_HASH'
+hit = False
+with open('$PRUNE_LEDGER') as f:
+    for line in f:
+        rec = json.loads(line)
+        if rec.get('hash') == target_hash:
+            hit = True
+            assert rec.get('recurrence_after_retention') is True, rec
+            break
+assert hit, 'recurring record not present'
+" 2>/dev/null; then
+    PASS=$((PASS+1))
+    echo "  PASS  T6 re-recorded tombstoned finding has recurrence_after_retention=true"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T6 recurrence_after_retention not set after retention"
+fi
+
+# --- T7: .kb-internal/ exclusion from reindex/search/recall ---
+EXCL_KB="$TMPDIR/distill-excl-kb"
+$KB --config "$CONFIG" bootstrap excl --path "$EXCL_KB" >/dev/null 2>&1
+mkdir -p "$EXCL_KB/.kb-internal/distill/notes"
+echo "SHOULD-NOT-APPEAR marker for T7" > "$EXCL_KB/.kb-internal/distill/notes/secret.md"
+$KB --config "$CONFIG" reindex excl --no-commit >/dev/null 2>&1
+if [ -f "$EXCL_KB/index.json" ]; then
+    if ! grep -q "SHOULD-NOT-APPEAR" "$EXCL_KB/index.json" \
+       && ! grep -q ".kb-internal" "$EXCL_KB/index.json"; then
+        PASS=$((PASS+1))
+        echo "  PASS  T7 reindex skips .kb-internal/ contents"
+    else
+        FAIL=$((FAIL+1))
+        echo "  FAIL  T7 index.json references .kb-internal/ content"
+    fi
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T7 index.json was not produced"
+fi
+SEARCH_OUT=$($KB --config "$CONFIG" search excl "SHOULD-NOT-APPEAR" 2>&1)
+if echo "$SEARCH_OUT" | grep -q "No results"; then
+    PASS=$((PASS+1))
+    echo "  PASS  T7 kb search excludes .kb-internal/"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T7 kb search surfaced .kb-internal/ content: $SEARCH_OUT"
+fi
+RECALL_OUT=$($KB --config "$CONFIG" recall excl --query "SHOULD-NOT-APPEAR" 2>&1)
+if echo "$RECALL_OUT" | grep -q "No results"; then
+    PASS=$((PASS+1))
+    echo "  PASS  T7 kb recall excludes .kb-internal/"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  T7 kb recall surfaced .kb-internal/ content: $RECALL_OUT"
+fi
+
+# T11 — validator rejects naive (timezone-less) detected_at at the boundary.
+TZ_KB=$TMPDIR/tz-kb
+$KB --config "$CONFIG" bootstrap tz --path "$TZ_KB" >/dev/null
+NAIVE_REC='{"track":"divergent","type":"open-question","source":"k/x.md#a","statement":"q","suggested_action":"needs-clarification","detected_at":"2024-01-01T00:00:00"}'
+run_fail 2 "T11 reject naive detected_at (no Z or offset)" \
+    $KB --config "$CONFIG" distill record tz --data "$NAIVE_REC"
+AWARE_REC='{"track":"divergent","type":"open-question","source":"k/x.md#a","statement":"q","suggested_action":"needs-clarification","detected_at":"2026-06-16T12:00:00Z"}'
+run "T11 accept aware detected_at (Z suffix)" \
+    $KB --config "$CONFIG" distill record tz --data "$AWARE_REC"
+run "T11 accept aware detected_at (+HH:MM offset)" \
+    $KB --config "$CONFIG" distill record tz --data \
+    '{"track":"divergent","type":"open-question","source":"k/y.md#b","statement":"q","suggested_action":"needs-clarification","detected_at":"2026-06-16T14:00:00+02:00"}'
+
+# T12 — `.kb-internal/` self-installs a gitignore; KB repo stays clean across
+# record + prune. Plugin-managed maintenance state must not block `kb sync`
+# or violate kb-dream's dry-run-first contract by leaving the repo dirty.
+GI_KB=$TMPDIR/gi-kb
+$KB --config "$CONFIG" bootstrap gi --path "$GI_KB" >/dev/null
+$KB --config "$CONFIG" distill record gi --data "$AWARE_REC" >/dev/null
+if [ -f "$GI_KB/.kb-internal/.gitignore" ]; then
+    PASS=$((PASS+1)); echo "  PASS  T12 .kb-internal/.gitignore self-installed on first record"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T12 .kb-internal/.gitignore missing after record"
+fi
+GI_DIRTY=$(git -C "$GI_KB" status --porcelain 2>/dev/null | grep -c "\.kb-internal" || true)
+if [ "$GI_DIRTY" -eq 0 ]; then
+    PASS=$((PASS+1)); echo "  PASS  T12 .kb-internal/ does not dirty the KB repo after record"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T12 .kb-internal/ appeared in git status: $GI_DIRTY entries"
+fi
+$KB --config "$CONFIG" distill prune gi --ttl-days 1 >/dev/null
+GI_DIRTY_AFTER_PRUNE=$(git -C "$GI_KB" status --porcelain 2>/dev/null | grep -c "\.kb-internal" || true)
+if [ "$GI_DIRTY_AFTER_PRUNE" -eq 0 ]; then
+    PASS=$((PASS+1)); echo "  PASS  T12 .kb-internal/ does not dirty the KB repo after prune"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T12 prune left .kb-internal/ dirty: $GI_DIRTY_AFTER_PRUNE entries"
+fi
+
+# T13 — JSON-mode surface always emits valid JSON. Empty ledger AND
+# filter-to-zero both return `[]`, so downstream `jq` / kb-dream's
+# context-aware emission step parses cleanly. Text mode keeps "doing
+# nothing is success" empty-stdout contract (covered by T4).
+JSON_KB=$TMPDIR/json-kb
+$KB --config "$CONFIG" bootstrap json --path "$JSON_KB" >/dev/null
+EMPTY_LEDGER_JSON=$($KB --config "$CONFIG" distill surface json --format json 2>/dev/null)
+if [ "$EMPTY_LEDGER_JSON" = "[]" ]; then
+    PASS=$((PASS+1)); echo "  PASS  T13 JSON surface on empty ledger emits []"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T13 JSON surface on empty ledger emitted: '$EMPTY_LEDGER_JSON'"
+fi
+$KB --config "$CONFIG" distill record json --data "$AWARE_REC" >/dev/null
+FILTERED_EMPTY_JSON=$($KB --config "$CONFIG" distill surface json --format json --type failure-mode 2>/dev/null)
+if [ "$FILTERED_EMPTY_JSON" = "[]" ]; then
+    PASS=$((PASS+1)); echo "  PASS  T13 JSON surface with no-match filter emits []"
+else
+    FAIL=$((FAIL+1)); echo "  FAIL  T13 JSON surface filter-to-zero emitted: '$FILTERED_EMPTY_JSON'"
+fi
+
+echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
     exit 1

@@ -5,7 +5,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from . import __version__
@@ -46,6 +46,19 @@ from .safety import (
     check_canonical_write,
     check_large_file,
     check_path_traversal,
+)
+from .distill import (
+    append_finding,
+    append_tombstone,
+    compute_hash,
+    ensure_distill_dir,
+    findings_path,
+    iter_findings,
+    read_live_hashes,
+    read_tombstone_hashes,
+    slugify,
+    tombstone_path,
+    validate_finding,
 )
 from .search import _extract_title, search_kb
 
@@ -1813,6 +1826,8 @@ def _discover_indexable_sections(kb_path):
     sections = []
     for entry in sorted(os.listdir(kb_path)):
         if entry.startswith("."):
+            # Dotfile-prefixed dirs (incl. `.kb-internal/` — plugin-managed
+            # distill ledger; enforces I-5 from change 1-kb-distill-v0).
             continue
         if entry in NON_INDEXED_SECTIONS:
             continue
@@ -2063,6 +2078,404 @@ def cmd_sync(args, config, config_path):
     return exit_code
 
 
+# --- Distill verbs ---
+
+
+def _normalise_source(source):
+    """Normalise the anchor portion of a finding source via slugify.
+
+    `source` follows the schema `<path>#<heading-text>`. The plugin slugifies
+    the heading-text portion (lowercase, dashes for whitespace, strip
+    punctuation — GitHub anchor convention) so identity hashing on
+    `(type, source)` is stable across casing/whitespace edits of the heading.
+    Sources without `#` are returned unchanged (path-only).
+    """
+    if not isinstance(source, str):
+        return source
+    if "#" not in source:
+        return source
+    path, _, anchor = source.partition("#")
+    return path + "#" + slugify(anchor)
+
+
+def _read_record_payload(args):
+    """Read the record payload from --data, --data-file, or stdin.
+
+    Returns `(payload_str, error_msg)`. Exactly one of (--data, --data-file)
+    may be provided; otherwise stdin is read. Empty input is an error.
+    """
+    if args.data is not None:
+        return args.data, None
+    if args.data_file is not None:
+        try:
+            with open(args.data_file, "r", encoding="utf-8") as f:
+                return f.read(), None
+        except OSError as exc:
+            return None, f"could not read --data-file: {exc}"
+    if sys.stdin.isatty():
+        return None, "no --data / --data-file provided and stdin is a tty"
+    raw = sys.stdin.read()
+    if not raw.strip():
+        return None, "empty stdin payload"
+    return raw, None
+
+
+def cmd_distill_record(args, config, config_path):
+    """Record a typed finding into the KB's append-only distill ledger.
+
+    Reads a JSON payload (inline `--data`, `--data-file`, or stdin) describing
+    one finding. The plugin always computes the identity hash server-side
+    over `(type, normalised_source)`; if the caller supplies `hash`, it must
+    match. `recurrence_after_retention` is likewise plugin-computed from the
+    tombstone — any client-supplied value is ignored.
+
+    Source normalisation: the anchor portion of `source` (after `#`) is
+    slugified before hashing, so `knowledge/foo.md#Cache Strategy` and
+    `knowledge/foo.md#cache-strategy` map to the same hash.
+
+    Dedup: if the computed hash is already in the live ledger, the record is
+    a silent no-op (exit 0). The existing hash is echoed on stderr for
+    observability. Validation failures exit `EXIT_ARGS`; IO failures exit
+    `EXIT_FAILURE`.
+    """
+    kb, err = _resolve_kb(config, args.kb)
+    if err or kb is None:
+        print(f"Error: {err}", file=sys.stderr)
+        return EXIT_ARGS
+
+    kb_path = kb["path"]
+    if not os.path.isdir(kb_path):
+        print(f"Error: KB path does not exist: {kb_path}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    payload_str, perr = _read_record_payload(args)
+    if perr is not None or payload_str is None:
+        print(f"Error: {perr}", file=sys.stderr)
+        return EXIT_ARGS
+
+    try:
+        record = json.loads(payload_str)
+    except json.JSONDecodeError as exc:
+        print(f"Error: invalid JSON payload: {exc}", file=sys.stderr)
+        return EXIT_ARGS
+
+    if not isinstance(record, dict):
+        print("Error: payload must be a JSON object", file=sys.stderr)
+        return EXIT_ARGS
+
+    # Normalise source anchor before hashing so identity is stable across
+    # heading-text casing/whitespace edits.
+    if "source" in record and isinstance(record["source"], str):
+        record["source"] = _normalise_source(record["source"])
+
+    type_ = record.get("type")
+    source = record.get("source")
+    if not isinstance(type_, str) or not type_:
+        print("Error: type must be a non-empty string", file=sys.stderr)
+        return EXIT_ARGS
+    if not isinstance(source, str) or not source:
+        print("Error: source must be a non-empty string", file=sys.stderr)
+        return EXIT_ARGS
+
+    computed_hash = compute_hash(type_, source)
+
+    if "hash" in record:
+        if record["hash"] != computed_hash:
+            print(
+                "Error: supplied hash does not match computed hash "
+                f"(supplied={record['hash']!r}, computed={computed_hash!r})",
+                file=sys.stderr,
+            )
+            return EXIT_ARGS
+    else:
+        record["hash"] = computed_hash
+
+    # Recurrence flag is always plugin-computed from the tombstone.
+    tombstoned = read_tombstone_hashes(kb_path)
+    record["recurrence_after_retention"] = computed_hash in tombstoned
+
+    ok, verr = validate_finding(record)
+    if not ok:
+        print(f"Error: invalid finding: {verr}", file=sys.stderr)
+        return EXIT_ARGS
+
+    # Dedup against the live ledger.
+    if computed_hash in read_live_hashes(kb_path):
+        print(
+            f"distill: hash already in ledger: {computed_hash}",
+            file=sys.stderr,
+        )
+        if args.json:
+            _output(
+                {
+                    "kb": kb["name"],
+                    "status": "deduped",
+                    "hash": computed_hash,
+                },
+                True,
+            )
+        return EXIT_OK
+
+    try:
+        ensure_distill_dir(kb_path)
+        append_finding(kb_path, record)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    except OSError as exc:
+        print(f"Error: failed to write ledger: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    if args.json:
+        _output(
+            {
+                "kb": kb["name"],
+                "status": "recorded",
+                "hash": computed_hash,
+                "recurrence_after_retention": record[
+                    "recurrence_after_retention"
+                ],
+            },
+            True,
+        )
+    else:
+        print(
+            f"distill: recorded {type_} at {source} "
+            f"(hash {computed_hash[:12]})"
+        )
+    return EXIT_OK
+
+
+def cmd_distill_surface(args, config, config_path):
+    """Surface findings from the KB's distill ledger (read-only).
+
+    Optional filters: `--type`, `--track`, `--since <iso8601>`. The verb-level
+    `--format {json,text}` controls output; when the global `--json` is set,
+    `--format` is forced to `json`. An empty ledger or fully-filtered-out
+    result prints nothing — "doing nothing is success." Read-only and
+    idempotent; always exits `EXIT_OK` on a parseable invocation.
+    """
+    kb, err = _resolve_kb(config, args.kb)
+    if err or kb is None:
+        print(f"Error: {err}", file=sys.stderr)
+        return EXIT_ARGS
+
+    kb_path = kb["path"]
+    if not os.path.isdir(kb_path):
+        # Cold-start "doing nothing is success" — empty surface, exit OK.
+        return EXIT_OK
+
+    # The global --json forces structured output; otherwise honour --format.
+    output_format = "json" if args.json else args.format
+
+    since_dt = None
+    if args.since is not None:
+        try:
+            since_dt = datetime.fromisoformat(args.since.replace("Z", "+00:00"))
+        except ValueError as exc:
+            print(
+                f"Error: --since is not a valid ISO 8601 timestamp: {exc}",
+                file=sys.stderr,
+            )
+            return EXIT_ARGS
+        # Naive `--since` is treated as UTC so the comparison below holds.
+        if since_dt.tzinfo is None:
+            since_dt = since_dt.replace(tzinfo=timezone.utc)
+
+    results = []
+    for record in iter_findings(kb_path):
+        if args.type is not None and record.get("type") != args.type:
+            continue
+        if args.track is not None and record.get("track") != args.track:
+            continue
+        if since_dt is not None:
+            detected_at = record.get("detected_at")
+            if not isinstance(detected_at, str):
+                continue
+            try:
+                rec_dt = datetime.fromisoformat(
+                    detected_at.replace("Z", "+00:00")
+                )
+            except ValueError:
+                continue
+            # Defence-in-depth against legacy naive entries; validation
+            # rejects naive at the record boundary going forward.
+            if rec_dt.tzinfo is None:
+                rec_dt = rec_dt.replace(tzinfo=timezone.utc)
+            if rec_dt < since_dt:
+                continue
+        results.append(record)
+
+    # JSON mode always emits valid JSON (`[]` when empty), so downstream
+    # `jq` / kb-dream's context-aware emission step parses cleanly. Text
+    # mode keeps the "doing nothing is success" empty-stdout contract.
+    if output_format == "json":
+        _output(results, True)
+        return EXIT_OK
+
+    if not results:
+        return EXIT_OK
+
+    for record in results:
+            statement = record.get("statement", "") or ""
+            if len(statement) > 80:
+                statement = statement[:77] + "..."
+            print(
+                f"{record.get('detected_at', '')} "
+                f"[{record.get('track', '')}/{record.get('type', '')}] "
+                f"{record.get('source', '')} — {statement}"
+            )
+    return EXIT_OK
+
+
+def cmd_distill_prune(args, config, config_path):
+    """Prune ledger entries older than `--ttl-days` (default 90).
+
+    Reads `findings.ndjson`, partitions on `detected_at` vs `now - ttl`, and
+    atomically rewrites the file with retained entries only. Pruned hashes
+    are appended to the tombstone (duplicates are tolerated — the tombstone
+    is a set on read). Entries with unparseable `detected_at` are retained
+    (safer than silent data loss on a parse glitch). Empty / missing ledger
+    is a no-op (`EXIT_OK`); IO failure during the atomic rewrite returns
+    `EXIT_FAILURE`.
+    """
+    kb, err = _resolve_kb(config, args.kb)
+    if err or kb is None:
+        print(f"Error: {err}", file=sys.stderr)
+        return EXIT_ARGS
+
+    kb_path = kb["path"]
+    if not os.path.isdir(kb_path):
+        return EXIT_OK
+
+    f_path = findings_path(kb_path)
+    if not os.path.isfile(f_path):
+        if args.json:
+            _output(
+                {
+                    "kb": kb["name"],
+                    "pruned": 0,
+                    "retained": 0,
+                    "ttl_days": args.ttl_days,
+                },
+                True,
+            )
+        return EXIT_OK
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=args.ttl_days)
+
+    retained = []
+    pruned = []
+    for record in iter_findings(kb_path):
+        detected_at = record.get("detected_at")
+        if not isinstance(detected_at, str):
+            retained.append(record)
+            continue
+        try:
+            rec_dt = datetime.fromisoformat(detected_at.replace("Z", "+00:00"))
+        except ValueError:
+            # Unparseable → keep, don't lose data on a parse glitch.
+            retained.append(record)
+            continue
+        # Defence-in-depth against legacy naive entries; validation rejects
+        # naive at the record boundary going forward.
+        if rec_dt.tzinfo is None:
+            rec_dt = rec_dt.replace(tzinfo=timezone.utc)
+        if rec_dt < cutoff:
+            pruned.append(record)
+        else:
+            retained.append(record)
+
+    if not pruned:
+        if args.json:
+            _output(
+                {
+                    "kb": kb["name"],
+                    "pruned": 0,
+                    "retained": len(retained),
+                    "ttl_days": args.ttl_days,
+                },
+                True,
+            )
+        else:
+            print(
+                f"distill: nothing to prune (ledger has {len(retained)} "
+                f"entries, all within TTL)"
+            )
+        return EXIT_OK
+
+    # Atomic rewrite of findings.ndjson via .tmp + os.replace.
+    tmp_path = f_path + ".tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            for record in retained:
+                f.write(
+                    json.dumps(record, ensure_ascii=False,
+                               separators=(",", ":"))
+                    + "\n"
+                )
+        os.replace(tmp_path, f_path)
+    except OSError as exc:
+        print(f"Error: failed to rewrite ledger: {exc}", file=sys.stderr)
+        try:
+            if os.path.isfile(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
+        return EXIT_FAILURE
+
+    # Append pruned hashes to the tombstone — duplicates are harmless
+    # (read_tombstone_hashes returns a set).
+    try:
+        for record in pruned:
+            h = record.get("hash")
+            if isinstance(h, str) and h:
+                append_tombstone(kb_path, h)
+    except (OSError, ValueError) as exc:
+        print(
+            f"Error: failed to append to tombstone: {exc}",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+
+    if args.json:
+        _output(
+            {
+                "kb": kb["name"],
+                "pruned": len(pruned),
+                "retained": len(retained),
+                "ttl_days": args.ttl_days,
+            },
+            True,
+        )
+    else:
+        print(
+            f"distill: pruned {len(pruned)} entries older than "
+            f"{args.ttl_days} days; {len(retained)} retained"
+        )
+    return EXIT_OK
+
+
+def cmd_distill_dispatch(args, config, config_path):
+    """Dispatch `kb distill <subcommand>` to the right handler.
+
+    Bare `kb distill` (no subcommand) prints the distill parser's help and
+    exits `EXIT_ARGS`.
+    """
+    sub = getattr(args, "distill_command", None)
+    if sub == "record":
+        return cmd_distill_record(args, config, config_path)
+    if sub == "surface":
+        return cmd_distill_surface(args, config, config_path)
+    if sub == "prune":
+        return cmd_distill_prune(args, config, config_path)
+    # No subcommand → print help via the parser stashed on args.
+    parser = getattr(args, "_distill_parser", None)
+    if parser is not None:
+        parser.print_help()
+    return EXIT_ARGS
+
+
 # --- Argument parser ---
 
 
@@ -2261,6 +2674,83 @@ def build_parser():
     p.add_argument("kb", nargs="?")
     p.add_argument("--all", action="store_true")
 
+    # distill (parent verb with record/surface/prune subcommands)
+    distill_parser = sub.add_parser(
+        "distill",
+        help="Manage the append-only typed-finding ledger.",
+        parents=[shared],
+    )
+    distill_sub = distill_parser.add_subparsers(dest="distill_command")
+
+    # distill record
+    dp = distill_sub.add_parser(
+        "record",
+        help="Append a typed finding to the ledger.",
+        parents=[shared],
+    )
+    dp.add_argument("kb", nargs="?")
+    payload_group = dp.add_mutually_exclusive_group()
+    payload_group.add_argument(
+        "--data",
+        default=None,
+        help="Inline JSON payload for the finding record.",
+    )
+    payload_group.add_argument(
+        "--data-file",
+        dest="data_file",
+        default=None,
+        help="Path to a file containing the JSON payload.",
+    )
+
+    # distill surface
+    dp = distill_sub.add_parser(
+        "surface",
+        help="Stream findings from the ledger (read-only).",
+        parents=[shared],
+    )
+    dp.add_argument("kb", nargs="?")
+    dp.add_argument(
+        "--type",
+        default=None,
+        help="Filter by finding type (one of the six v0 types).",
+    )
+    dp.add_argument(
+        "--track",
+        default=None,
+        choices=("convergent", "divergent"),
+        help="Filter by track.",
+    )
+    dp.add_argument(
+        "--since",
+        default=None,
+        help="Only show entries with detected_at >= this ISO 8601 timestamp.",
+    )
+    dp.add_argument(
+        "--format",
+        default="text",
+        choices=("json", "text"),
+        help="Output format (default: text). Forced to 'json' when --json is set.",
+    )
+
+    # distill prune
+    dp = distill_sub.add_parser(
+        "prune",
+        help="Drop ledger entries older than --ttl-days; tombstone their hashes.",
+        parents=[shared],
+    )
+    dp.add_argument("kb", nargs="?")
+    dp.add_argument(
+        "--ttl-days",
+        dest="ttl_days",
+        type=int,
+        default=90,
+        help="Retention window in days (default: 90).",
+    )
+
+    # Stash the parser on the namespace so the dispatcher can print help for
+    # bare `kb distill`.
+    distill_parser.set_defaults(_distill_parser=distill_parser)
+
     return parser
 
 
@@ -2308,6 +2798,7 @@ def main():
         "reindex": cmd_reindex,
         "forget": cmd_forget,
         "sync": cmd_sync,
+        "distill": cmd_distill_dispatch,
     }
 
     handler = dispatch.get(args.command)
