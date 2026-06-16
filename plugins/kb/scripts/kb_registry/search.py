@@ -103,9 +103,16 @@ def _search_rg(path, query, max_results=20, glob_pattern=None,
 
 def _search_python(path, query, max_results=20, glob_pattern=None,
                    exclude_inbox=False):
-    """Fallback: walk directory and search .md files with re."""
+    """Fallback: walk directory and search .md files with re.
+
+    Mirrors rg's `--smart-case`: any uppercase char in the query →
+    case-sensitive; all lowercase → case-insensitive. Keeps the rg and
+    fallback branches behaviourally identical so environments without rg
+    (typical CI runners) see the same hits.
+    """
+    flags = 0 if any(c.isupper() for c in query) else re.IGNORECASE
     try:
-        pattern = re.compile(re.escape(query), re.IGNORECASE)
+        pattern = re.compile(re.escape(query), flags)
     except re.error:
         return []
 

@@ -2,6 +2,11 @@
 
 # Changelog
 
+## 0.7.3 — 2026-06-16
+
+### Fixed
+- `kb search` Python fallback (rg-unavailable environments, e.g. CI runners without ripgrep) now honours smart-case to match the rg branch: uppercase characters in the query make the search case-sensitive. Previously the fallback was unconditionally case-insensitive, diverging from rg and failing the smart-case regression test in CI.
+
 ## 0.7.2 — 2026-06-16
 
 ### Changed
