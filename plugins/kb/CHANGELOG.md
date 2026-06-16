@@ -2,12 +2,11 @@
 
 # Changelog
 
-## 0.7.1 — 2026-06-16
+## 0.7.2 — 2026-06-16
 
 ### Changed
-- **Distill ledger is now tracked by git** (reverses the 0.7.0 D-12 decision). Findings are durable consolidation output, not local maintenance state — emitted from inbox material at consolidation time, then never re-derived because the source material moves to `inbox/processed/`. Gitignoring stranded findings on the machine that produced them; WARDEN and other clones never saw them. The plugin no longer self-installs `.kb-internal/.gitignore`; legacy 0.7.0 gitignores with the plugin's marker comment self-uninstall on the next `kb distill record`/`prune` so existing KBs converge without manual cleanup. User-authored `.kb-internal/.gitignore` files (without the marker) are preserved untouched.
-- `kb distill prune` moved from kb-dream **step 1 (Orient)** to **step 5 (Apply)**. The dry-run gate now leaves the working tree clean — an aborted dream pass produces zero file mutations. Prune is still deterministic (TTL-bounded) and runs unconditionally inside the apply step, alongside `kb distill record` and canonical writes.
-- `kb-dream` agent prompt updated: step 1 no longer invokes prune; step 5 runs prune before recording new findings; step 7's commit step explicitly includes `.kb-internal/distill/*` via `git add -A`.
+- Plugin no longer gitignores `.kb-internal/distill/`. `kb-dream` commits the ledger alongside canonical pages during the apply step so findings travel to downstream consumers.
+- `kb distill prune` moved from `kb-dream` step 1 to step 5 (apply). An aborted dream pass leaves the working tree clean.
 
 ## 0.7.0 — 2026-06-16
 

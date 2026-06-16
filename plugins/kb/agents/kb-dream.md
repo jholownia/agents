@@ -74,7 +74,7 @@ knowledge/  (and any other indexable sections)
 inbox/
 ```
 
-**Never read or modify `.kb-internal/`** by hand. It is the plugin-managed namespace for the distill ledger (see step 3b). Interact with it only through `kb distill *` verbs. `kb reindex`, `kb search`, and `kb recall` already exclude it. The ledger IS tracked by git so findings travel with the KB to other clones and downstream consumers (WARDEN, etc.); only its contents are off-limits to direct edits.
+**Never read or modify `.kb-internal/`** by hand. It is the plugin-managed namespace for the distill ledger (see step 3b). Interact with it only through `kb distill *` verbs. `kb reindex`, `kb search`, and `kb recall` already exclude it.
 
 If `AGENTS.md`, `BRIEF.md`, and the existing structure disagree, prefer `AGENTS.md` and surface the mismatch in the dry-run plan.
 
@@ -206,7 +206,7 @@ When approved, edit the KB directly:
 - When a new note contradicts an existing canonical claim, **replace the old claim** and append a supersession entry to `LOG.md` listing both the consumed inbox note and the prior canonical claim. Interference, not silent rewrite.
 - Append a short entry to `LOG.md` summarising what was consumed.
 - Mark consumed inbox notes as processed or move them under `inbox/processed/`.
-- Run `${CLAUDE_PLUGIN_ROOT}/bin/kb distill prune <kb>` to drop expired findings (default 90-day TTL). Prune is deterministic maintenance — kept inside the apply step so the dry-run gate leaves the working tree clean; an aborted dream pass produces zero mutations.
+- Run `${CLAUDE_PLUGIN_ROOT}/bin/kb distill prune <kb>` to drop expired findings (default 90-day TTL).
 - Emit each approved distill finding from the Dream Plan via `kb distill record`. The plugin computes the hash, the tombstone-based `recurrence_after_retention` flag, and the anchor normalisation; you supply the typed payload:
 
   ```bash
@@ -241,7 +241,7 @@ Review the diff for overbroad rewrites, invented facts, lost provenance, and acc
 
 ### 7. Commit
 
-If the KB is cleanly updated and the user wants the change kept, commit in the KB repo. `git add -A` includes the distill ledger (`.kb-internal/distill/*`) alongside canonical pages and inbox moves — the ledger is durable consolidation output, not local cache, so it must travel:
+If the KB is cleanly updated and the user wants the change kept, commit in the KB repo:
 
 ```bash
 git -C <kb-path> add -A

@@ -26,9 +26,7 @@ Every knowledge base must contain:
 
 ### Plugin-reserved namespace: `.kb-internal/`
 
-The `.kb-internal/` directory at the KB root is plugin-managed — agents and humans must not read or modify it by hand. Currently used for the distill ledger (`.kb-internal/distill/findings.ndjson` and `.kb-internal/distill/pruned-hashes.ndjson`). Excluded from `kb reindex`, `kb search`, and `kb recall` at the plugin code layer (not a per-KB AGENTS.md convention — single source of exclusion truth).
-
-The ledger **is tracked by git**: findings are durable consolidation output, not local cache. They must travel with the KB so downstream consumers (other clones, WARDEN, future tooling) see the same set. The `kb-dream` agent commits `.kb-internal/distill/*` alongside canonical pages during the apply step, and the deterministic `kb distill prune` runs inside the same apply step so the dry-run gate leaves the working tree clean. Earlier 0.7.0 KBs self-installed a `.kb-internal/.gitignore` to suppress the ledger; that file self-uninstalls on the next `kb distill record`/`prune` in 0.7.1+ so existing KBs converge without manual cleanup. Future plugin-internal state may live here under additional subdirectories.
+The `.kb-internal/` directory at the KB root is plugin-managed — agents and humans must not read or modify it by hand. Currently used for the distill ledger (`.kb-internal/distill/findings.ndjson` and `.kb-internal/distill/pruned-hashes.ndjson`). Excluded from `kb reindex`, `kb search`, and `kb recall` at the plugin code layer (not a per-KB AGENTS.md convention — single source of exclusion truth). `kb-dream` commits the ledger and runs `kb distill prune` during the apply step (step 5). Future plugin-internal state may live here under additional subdirectories.
 
 ### Three-layer scoping (what goes where)
 
