@@ -62,6 +62,12 @@ Non-obvious calls made during framing, each with a one-line rationale.
   `impact.md` or `design.md` and link from here.
 - A locked decision is a commitment to a specific reading. If it starts to
   look wrong during execution, surface it to the user — don't flip silently.
+- If the batch has an Architecture section in `PROJECT.md`, reference its
+  decisions explicitly: `per A-2` for in-shape changes, or
+  `deviates from A-2 because …` for explicit deviation. Silent drift is
+  the failure mode that the architecture pass exists to prevent — see
+  [architecture.md](architecture.md) and `failure-modes.md` →
+  *Copy-the-previous-change drift*.
 
 For changes with `design.md` (architectural weight), consider the 3-column
 table form — it forces resolution and rationale apart, makes each decision

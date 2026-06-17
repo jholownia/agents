@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD024 MD040 -->
+
 # Failure modes
 
 Observed ways this protocol breaks, with the practice that prevents each.
@@ -39,6 +41,47 @@ same "out of scope" flag that legitimately covered only the rename.
    each original sub-item, state explicitly whether it landed, landed
    differently, or was deferred. A "deferred" sub-item is recorded as such; it
    doesn't disappear into the archived `validation.md`.
+
+## Copy-the-previous-change drift
+
+The decomposition-time failure mode.
+
+### What happens
+
+A batch decomposes into N changes of plausibly-similar shape. Change 2's
+framing starts *"like change 1 but …"*. Change 3's: *"like change 2 but …"*.
+By change 5, what should have been one engine with N injection points is N
+near-duplicate implementations, each carrying change 1's incidental choices
+without the justifying context.
+
+The tell — **"like {N-1} but …"** — is the agent under narrow implementation
+focus, reaching for the closest concrete artefact (the previous change)
+instead of the common shape all N share.
+
+### Worked case — WARDEN workflows
+
+Five workflows (assigned-issues, cloudwatch-scan, tech-debt-scan, distill,
+kb-consolidate). Each takes a triage signal → opens PR(s) → reconciles
+state. The roadmap was known upfront. Without an architecture pass, what
+landed was a bespoke `run.py` per workflow, three near-duplicate verdict
+tools (`submit_verdict` / `submit_triage` / `submit_outcome`), duplicated
+commit / push / PR wiring, and per-workflow dry-run handling that diverged
+subtly.
+
+The concrete bug: assigned-issues copied cloudwatch-scan's read-only
+`Read/Grep/Glob` tool grant but **not** the reproduction harness that
+justified the read-only constraint. Result: assigned-issues had no DB
+access and declined a data-driven task. Copy-paste propagated cloudwatch's
+incidental choice as if it were load-bearing.
+
+### Cure
+
+See [architecture.md](architecture.md). Short version: when the roadmap
+already enumerates 3+ similar items, run the architecture pass at Phase 2
+and have per-change `validation.md` reference its `A-N` decisions
+explicitly. The symmetric trap is manufacturing an engine for genuinely
+independent changes — *"no common shape — N independent changes"* is a
+valid Phase 2 output; rule of three applies.
 
 ## Paraphrased user clarifications
 
@@ -284,7 +327,7 @@ is incidental; the action is the contract.
 
 ### Validation-phase checklist
 
-Before locking the Tests list at Phase 5, scan it through these three
+Before locking the Tests list at Phase 6, scan it through these three
 questions. For each test ask:
 
 1. If I deleted this test today, would any locked decision become

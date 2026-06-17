@@ -41,8 +41,12 @@ resolved manually on merge.
 ## Workflow
 
 The steps below are **per-change**. (If the `spec-driven-execution` skill is
-driving, its phase table also covers scaffolding and decomposition: skill
-Phase 2 = steps 0–1 here, Phases 3–6 = steps 2–5.)
+driving, its phase table also covers scaffolding, decomposition, and the
+upfront architecture pass: skill Phase 3 = steps 0–1 here, Phases 4–7 =
+steps 2–5. Phase 2 (architecture pass) is per-batch, not per-change — its
+output lives in `PROJECT.md`'s Architecture section (or a sibling
+`ARCHITECTURE.md`) and the per-change `validation.md` references its
+`A-N` decisions.)
 
 0. **Context** — before framing, gather enough ground to know what "done" looks
    like. Read the source issue and any linked subissues. Read the relevant
@@ -94,7 +98,10 @@ The contract the change must satisfy. Sections, in order:
   reference from elsewhere in the spec, from code (`# implements D-3`),
   and from tests (`test_d3_*`). If rationale is long, put it in
   `impact.md` or `design.md` and link. Invariants in `design.md` follow
-  the same convention with **I-N**.
+  the same convention with **I-N**. If the batch has an Architecture
+  section in `PROJECT.md`, reference its decisions as `per A-N` or record
+  deviations explicitly (`deviates from A-2 because …`) — silent drift is
+  the failure mode.
 - **Tests** — automated checks (new or modified). One line per test, named.
   Before locking the list, scan it for the test-proliferation antipatterns
   (see the anti-patterns section below).
@@ -149,6 +156,9 @@ changes.
 - Writing framing files after the code already exists.
 - Editing archived changes — they're frozen. Write a new change instead.
 - One folder growing past ~30 tasks or ~150 lines of description — split.
+- **Copy-the-previous-change drift** — framing reading "like change N-1 but …".
+  Stop and extract the abstraction (the skill's Phase 2 / `PROJECT.md`
+  Architecture section) instead of copy-pasting and diverging silently.
 - **Test proliferation.** Three shapes that look like coverage but are
   drift: (1) `assert "..." in <doc/config/prompt>` (string-grep on
   artefacts — passes even when the artefact is broken), (2) `assert

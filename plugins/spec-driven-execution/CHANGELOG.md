@@ -2,6 +2,21 @@
 
 # Changelog
 
+## 0.3.0 — 2026-06-17
+
+### Added
+
+- **Phase 2 — Architecture pass.** When the decomposition names 3+ items of plausibly-similar shape, the protocol now requires an explicit pattern survey + proposed default shape + numbered `A-N` decisions, captured in a new `## Architecture` section in `PROJECT.md` (or sibling `ARCHITECTURE.md` for heavier batches). Per-change `validation.md` references `A-N` or records deviations explicitly. Sourced from a WARDEN-workflow batch retrospective where copy-paste from change N-1 propagated incidental choices as if load-bearing (#362). Deliberately framed as a grounding document, not a binding spec — the deviation contract gives it teeth without ossifying.
+- `references/architecture.md` — output shape, deviation contract, worked example, Architect subagent prompt.
+- `references/patterns.md` — short opinionated pattern vocabulary (Strategy, Command, Policy, Pipeline, State machine, DI, Ports & adapters, Shared skeleton + hooks).
+- *Copy-the-previous-change drift* failure mode in `references/failure-modes.md`. The tell — *"like change N-1 but …"* — plus the symmetric premature-abstraction warning.
+
+### Changed
+
+- Phase numbering in `SKILL.md`: 0–6 → 0–7. Per-change template steps in `assets/templates/CLAUDE.md` remain 0–5; mapping note updated accordingly.
+- Phase detection table reads top-down, first match wins, and Phase 2 is detected by the *presence* of a `## Architecture` section (filled or skip-marker) — the scaffolded `PROJECT.md` no longer pre-installs the heading, so the detector fires correctly on fresh scaffolds.
+- `assets/templates/validation.md`, `references/framing.md`, `assets/templates/CLAUDE.md`: change-level decisions instruct framings to reference `A-N` or record deviations explicitly.
+
 ## 0.2.0 — 2026-06-11
 
 ### Added

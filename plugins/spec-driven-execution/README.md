@@ -10,17 +10,18 @@ The change folder is the durable unit across sessions. A fresh agent dispatched 
 
 ## What it does
 
-Provides one skill, `spec-driven-execution`, with a seven-phase workflow (0–6):
+Provides one skill, `spec-driven-execution`, with an eight-phase workflow (0–7):
 
 | Phase | What |
 |---|---|
 | 0 — Scaffold | Bootstrap `.changes/` and copy the protocol templates |
 | 1 — Frame umbrella | Write `PROJECT.md` for the batch |
-| 2 — Frame change | Write `description.md` + `validation.md` per change |
-| 3 — Plan | Fill `tasks.md`; add `proposal` / `design` / `impact` if warranted |
-| 4 — Execute | Work the checklist; update in place |
-| 5 — Validate | Run every check; resolve each sub-item explicitly |
-| 6 — Archive | Freeze the folder as the decision record |
+| 2 — Architecture pass | When 3+ items share shape, lock a default architecture (patterns + `A-N` decisions) before per-change framing |
+| 3 — Frame change | Write `description.md` + `validation.md` per change |
+| 4 — Plan | Fill `tasks.md`; add `proposal` / `design` / `impact` if warranted |
+| 5 — Execute | Work the checklist; update in place |
+| 6 — Validate | Run every check; resolve each sub-item explicitly |
+| 7 — Archive | Freeze the folder as the decision record |
 
 Phase is detected from `.changes/` state — the skill picks up wherever the workspace already is.
 
@@ -43,7 +44,7 @@ plugins/spec-driven-execution/
     test_spec_driven_execution.sh   # structural smoke check
   skills/spec-driven-execution/
     SKILL.md
-    references/         # framing.md, scaffolding.md, failure-modes.md
+    references/         # framing.md, scaffolding.md, failure-modes.md, architecture.md, patterns.md
     assets/templates/   # CLAUDE.md, PROJECT.md + per-change file templates
 ```
 

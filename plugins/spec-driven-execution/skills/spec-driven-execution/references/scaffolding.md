@@ -88,11 +88,23 @@ Keep it short. Sections, in order:
 - **Authoritative external context** — spec repo paths, design docs, with one-line summaries.
 - **Decomposition** — table mapping change folders to subissues or sub-tasks, with status.
 - **Scope boundaries** — quoted clarifications, what's in this batch, what's adjacent.
+- **Architecture** — *added at Phase 2, not at scaffold time.* The heading
+  is the cue that the architecture pass has been considered. Two valid
+  bodies: (a) pattern survey + proposed default shape + numbered `A-N`
+  decisions when the batch has a common shape; (b) the single line
+  *"No common shape — N independent changes."* when it doesn't. Pick one
+  — *omitting the section is not a valid third option once Phase 2 fires*,
+  because the phase detector reads its absence as "pass not yet
+  considered". See [architecture.md](architecture.md) for the output shape
+  and [patterns.md](patterns.md) for the starter pattern vocabulary;
+  promote to sibling `.changes/ARCHITECTURE.md` if the section outgrows
+  `PROJECT.md`.
 - **For dispatched agents** — read order: `.changes/CLAUDE.md`, `PROJECT.md`,
-  `active/{change-id}/description.md`, `active/{change-id}/validation.md`, then the
-  external specs.
+  optional `.changes/ARCHITECTURE.md`, `active/{change-id}/description.md`,
+  `active/{change-id}/validation.md`, then the external specs.
 
-If a section is empty for this work, omit it. Don't pad.
+For sections other than Architecture: if a section is empty for this work,
+omit it. Don't pad.
 
 ## Naming the change folders
 

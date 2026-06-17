@@ -86,7 +86,7 @@ assert m, 'description should open with \"This skill should be used when ...\"'
 
 echo ""
 echo "--- 4. References ---"
-for ref in framing scaffolding failure-modes; do
+for ref in framing scaffolding failure-modes architecture patterns; do
     run "references/$ref.md exists" test -f "$SKILL_DIR/references/$ref.md"
 done
 

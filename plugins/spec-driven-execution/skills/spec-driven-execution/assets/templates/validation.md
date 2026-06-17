@@ -50,6 +50,11 @@
   A locked decision is a commitment. If it starts to look wrong during
   execution, surface it to the user — don't flip silently.
 
+  If PROJECT.md has an Architecture section, reference its A-N decisions
+  explicitly: `per A-2` for in-shape choices, or `deviates from A-2
+  because …` for explicit deviation. Silent drift is the failure mode
+  the architecture pass exists to prevent.
+
   For design.md-grade changes, see references/framing.md for the optional
   3-column table form.
 -->
