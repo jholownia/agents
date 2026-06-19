@@ -37,10 +37,12 @@ ${CLAUDE_PLUGIN_ROOT}/bin/kb open <kb> <relative/path>
 
 ### Looking at consolidation history
 
-`kb-dream` records each pass in `LOG.md` at the KB root. To see what was consolidated when, what was superseded, and open follow-up questions:
+`LOG.md` at the KB root is a bounded view — the **latest** consolidation snapshot plus live **open follow-ups**. To see the full per-pass history (what was consolidated when, what was superseded), use git:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/bin/kb open <kb> LOG.md
+git -C <kb-path> log --oneline -- LOG.md   # every pass
+git -C <kb-path> show <hash>               # what one pass changed
+${CLAUDE_PLUGIN_ROOT}/bin/kb open <kb> LOG.md  # current open follow-ups + latest pass
 ```
 
 Full flag reference: `${CLAUDE_PLUGIN_ROOT}/references/commands.md`.

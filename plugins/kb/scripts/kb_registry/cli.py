@@ -683,18 +683,6 @@ def _entry_to_result(entry, kb_name, source):
     }
 
 
-def _log_append(kb_path, line):
-    """Append a single bullet line to LOG.md, ensuring trailing newline."""
-    log_path = os.path.join(kb_path, "LOG.md")
-    existing = ""
-    if os.path.isfile(log_path):
-        with open(log_path, "r", errors="replace") as f:
-            existing = f.read()
-    sep = "" if existing.endswith("\n") or not existing else "\n"
-    with open(log_path, "a") as f:
-        f.write(sep + line + "\n")
-
-
 def _index_md_links_path(kb_path, rel_path):
     """True if INDEX.md contains a Markdown link pointing at rel_path."""
     p = os.path.join(kb_path, "INDEX.md")
@@ -721,9 +709,10 @@ def cmd_forget(args, config, config_path):
     """Remove a single page from an indexable section.
 
     Git remembers the deletion, so this is a soft forget for retrieval but a
-    hard remove for the agent's working surface. Appends a one-line LOG.md
-    entry capturing date + optional reason. Index.json is not auto-rebuilt
-    (run `kb reindex`).
+    hard remove for the agent's working surface. The optional `--reason`
+    rides on the commit message body — LOG.md is a bounded materialized
+    view, not a journal, so the audit trail lives in git (`git log -- <path>`,
+    `git show <hash>`). Index.json is not auto-rebuilt (run `kb reindex`).
     """
     kb, err = _resolve_kb(config, args.kb)
     if err:
@@ -782,9 +771,11 @@ def cmd_forget(args, config, config_path):
         print(f"Error: file not found: {rel}", file=sys.stderr)
         return EXIT_FAILURE
 
-    reason = " ".join((args.reason or "").split()) or "(no reason given)"
-    today = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
-    log_line = f"- {today}: forgot `{rel}` — {reason}"
+    reason = " ".join((args.reason or "").split())
+    commit_subject = f"kb: forget {rel}"
+    commit_message = (
+        f"{commit_subject}\n\nReason: {reason}\n" if reason else commit_subject
+    )
     indexed_warn = _index_md_links_path(kb_path, rel)
 
     if args.dry_run:
@@ -794,12 +785,14 @@ def cmd_forget(args, config, config_path):
                 "dry_run": True,
                 "path": rel,
                 "reason": reason,
-                "log_line": log_line,
+                "commit_message": commit_message,
                 "index_md_references": indexed_warn,
             }, True)
         else:
             print(f"Would forget {rel}")
-            print(f"  LOG.md entry: {log_line}")
+            print(f"  commit subject: {commit_subject}")
+            if reason:
+                print(f"  commit body:    Reason: {reason}")
             if indexed_warn:
                 print(f"  Warning: INDEX.md still references {rel} — edit by hand.")
             print("  index.json will be stale until `kb reindex`.")
@@ -818,15 +811,13 @@ def cmd_forget(args, config, config_path):
             ctx["success"] = False
             return EXIT_FAILURE
 
-        _log_append(kb_path, log_line)
-
         committed = False
         if not args.no_commit and git_is_repo(kb_path):
-            # `git add` stages deletions in modern git, so this picks up both
-            # the LOG.md modification and the removed file.
-            git_add_files(kb_path, ["LOG.md", rel])
+            # `git add --` stages the deletion; the reason rides on the
+            # commit body. LOG.md is intentionally not touched.
+            git_add_files(kb_path, [rel])
             ok, out, rc = git_commit_files(
-                kb_path, f"kb: forget {rel}", ["LOG.md", rel]
+                kb_path, commit_message, [rel]
             )
             committed = ok
             if not ok and "nothing to commit" not in out:
@@ -837,7 +828,7 @@ def cmd_forget(args, config, config_path):
                 "kb": kb["name"],
                 "path": rel,
                 "reason": reason,
-                "log_line": log_line,
+                "commit_message": commit_message,
                 "index_md_references": indexed_warn,
                 "committed": committed,
             }, True)
@@ -2663,7 +2654,8 @@ def build_parser():
     )
     p.add_argument("kb", nargs="?")
     p.add_argument("path")
-    p.add_argument("--reason", help="Short reason recorded in LOG.md.")
+    p.add_argument("--reason",
+                   help="Short reason recorded in the commit message body.")
     p.add_argument("--dry-run", action="store_true",
                    help="Show what would happen without removing anything.")
     p.add_argument("--no-commit", action="store_true")

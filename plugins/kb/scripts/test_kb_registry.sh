@@ -985,7 +985,8 @@ import json, sys
 d = json.loads(sys.stdin.read())
 assert d.get('dry_run') is True, d
 assert d.get('path') == 'knowledge/scratch.md', d
-assert 'duplicate of widgets' in d.get('log_line', ''), d
+assert 'duplicate of widgets' in d.get('commit_message', ''), d
+assert 'log_line' not in d, d
 " && test -f "$TEST_KB/knowledge/scratch.md"; then
     PASS=$((PASS+1))
     echo "  PASS  forget --dry-run reports plan without removing"
@@ -993,23 +994,33 @@ else
     FAIL=$((FAIL+1))
     echo "  FAIL  forget dry-run touched file or misreported (got: $OUT)"
 fi
-# Apply: deletes file, appends LOG.md, commits.
+# Snapshot LOG.md so we can assert forget never touches it.
+LOG_BEFORE_FORGET=$(shasum "$TEST_KB/LOG.md" | awk '{print $1}')
+# Apply: deletes file, commits (reason rides on the commit body, NOT LOG.md).
 run "forget removes knowledge page" $KB --config "$CONFIG" forget test knowledge/scratch.md --reason "obsolete"
 run "forget actually removed file" bash -c "! test -f '$TEST_KB/knowledge/scratch.md'"
-if grep -q "forgot \`knowledge/scratch.md\`" "$TEST_KB/LOG.md"; then
+LOG_AFTER_FORGET=$(shasum "$TEST_KB/LOG.md" | awk '{print $1}')
+if [ "$LOG_BEFORE_FORGET" = "$LOG_AFTER_FORGET" ]; then
     PASS=$((PASS+1))
-    echo "  PASS  LOG.md captured the forget entry"
+    echo "  PASS  forget leaves LOG.md untouched (bounded view, not journal)"
 else
     FAIL=$((FAIL+1))
-    echo "  FAIL  LOG.md missing forget entry"
+    echo "  FAIL  forget modified LOG.md"
 fi
-# Commit landed.
+# Commit landed with reason in body.
 if git -C "$TEST_KB" log -1 --format=%s | grep -q "kb: forget knowledge/scratch.md"; then
     PASS=$((PASS+1))
-    echo "  PASS  forget commit message is correct"
+    echo "  PASS  forget commit subject is correct"
 else
     FAIL=$((FAIL+1))
     echo "  FAIL  forget did not commit (or wrong subject)"
+fi
+if git -C "$TEST_KB" log -1 --format=%b | grep -q "^Reason: obsolete$"; then
+    PASS=$((PASS+1))
+    echo "  PASS  forget commit body carries reason"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  forget commit body missing reason"
 fi
 # Git history still has the content (forget = soft for retrieval, hard for surface).
 if git -C "$TEST_KB" log --all -- knowledge/scratch.md | grep -q "test: seed forget fixtures"; then

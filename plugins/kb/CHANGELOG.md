@@ -2,6 +2,13 @@
 
 # Changelog
 
+## 0.8.0 — 2026-06-19
+
+### Changed
+
+- **`LOG.md` is now a bounded materialized view, not an append-only journal.** It holds only `## Open follow-ups` (unresolved items, edited in place) and `## Latest consolidation` (a snapshot of the most recent pass, overwritten each pass). Full consolidation history lives in git (`git log -- LOG.md`); what's been processed lives in `inbox/processed/`; what's been surfaced lives in the distill ledger. The old append-only model grew unboundedly (~40 lines/pass, the consolidation agent read it in full every pass) and resolved follow-ups rotted in place. Affects the `kb-dream` agent prompt (new rule 10 inserted, renumber + provenance / supersession changes), `references/kb-contract.md`, the `recall` skill's "consolidation history" guidance, and the `kb_template.py` `LOG_MD` / `AGENTS_MD` seeds for newly bootstrapped KBs. Existing KBs continue to work; the new model applies once their agent picks up the v0.8.0 prompt.
+- **`kb forget` no longer touches `LOG.md`.** The optional `--reason` now rides on the commit message body (`Reason: <text>`); the commit subject still records the path. The forget audit trail is `git log -- <path>` + `git show <hash>` — consistent with the new bounded-LOG model. JSON output: `log_line` replaced by `commit_message`. Test suite asserts the LOG.md hash is unchanged across a forget and that the commit body carries the reason.
+
 ## 0.7.3 — 2026-06-16
 
 ### Fixed

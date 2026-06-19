@@ -9,7 +9,7 @@ Every knowledge base must contain:
   AGENTS.md       # Agent rules for this KB
   BRIEF.md        # Compact summary — progressive disclosure entrypoint
   INDEX.md        # Navigational index
-  LOG.md          # Maintenance and consolidation journal
+  LOG.md          # Bounded: latest consolidation + open follow-ups (history in git)
   inbox/          # Staging area for raw material
   knowledge/      # Seed canonical section (KBs may add others)
   notes/          # Append-only single-paragraph memories with tags
@@ -55,8 +55,7 @@ KB-local rules that agents must follow:
 
 ## LOG.md
 
-Append a short entry when inbox notes are consolidated into canonical knowledge.
-Entries should record consumed inbox/source paths, canonical pages created or updated, and unresolved questions.
+A bounded materialized view, **not** an append-only journal — full history lives in git (`git log -- LOG.md`). Holds two living sections: `## Open follow-ups` (unresolved questions and action items, edited in place — add when surfaced, remove when resolved) and `## Latest consolidation` (a snapshot of the most recent pass, overwritten each pass). What's been processed lives in `inbox/processed/` + git; what's been surfaced lives in the distill ledger (`kb distill surface`).
 
 ## Notes format
 

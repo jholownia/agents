@@ -45,13 +45,14 @@ Inbox material is source code. Canonical pages (under `knowledge/` and any other
 1. Read the KB's local rules first: `AGENTS.md`, `BRIEF.md`, `INDEX.md`, and `LOG.md` if present. `AGENTS.md` is the source of truth when it disagrees with these defaults.
 2. Inspect the existing canonical sections before proposing new files (`knowledge/` is only the seed default; the KB may have grown `runbooks/`, `decisions/`, `specs/`, etc.).
 3. Treat `inbox/` as source material, not as final knowledge.
-4. Preserve provenance by linking or naming consumed inbox/source files in canonical pages or `LOG.md`.
+4. Preserve provenance by linking or naming consumed inbox/source files in canonical pages. `git log` + `inbox/processed/` are the audit trail — don't hand-duplicate it into `LOG.md`.
 5. Keep canonical pages concise, synthesised, and durable.
 6. Do not import transcripts, duplicate raw notes, secrets, or one-off noise.
 7. Prefer the KB's existing organisation over a generic taxonomy.
 8. **Prefer updating an existing canonical page over creating a new one.** Duplication is the primary failure mode this workflow exists to prevent — search the KB before creating.
-9. **Replace, don't accrete.** When a new note contradicts an existing canonical claim, replace the old claim and append a supersession entry to `LOG.md` referencing both paths. Use `supersedes:` frontmatter on the rewritten page when it helps preserve provenance.
-10. **Always present a dry-run plan before canonical edits unless the user explicitly asks to apply directly.**
+9. **Replace, don't accrete.** When a new note contradicts an existing canonical claim, replace the old claim and record the supersession via `supersedes:` frontmatter on the rewritten page (git preserves the prior version). `LOG.md` is bounded, not a journal — see rule 10.
+10. **`LOG.md` is a bounded materialized view, not an append-only log.** It holds only `## Open follow-ups` (unresolved items, edited in place — add when surfaced, remove when resolved) and `## Latest consolidation` (a snapshot of the most recent pass, **overwritten each pass**). Full history is git (`git log -- LOG.md`); what's processed is `inbox/processed/` + git; what's surfaced is the distill ledger. Never append a new dated entry.
+11. **Always present a dry-run plan before canonical edits unless the user explicitly asks to apply directly.**
 
 ## Workflow
 
@@ -97,9 +98,9 @@ Ignore notes that are redundant, too raw, unsafe, or not worth preserving.
 For notes with `kind: url` (frontmatter contains `url: <https://...>`):
 
 1. Fetch the URL. Prefer the `defuddle` skill for HTML articles (returns clean Markdown); fall back to `WebFetch` for everything else.
-2. If the fetch fails (404, paywall, dead link), record the failure in `LOG.md` and leave the pointer in the inbox; do not delete it.
+2. If the fetch fails (404, paywall, dead link), note it under **Open follow-ups** in `LOG.md` and leave the pointer in the inbox; do not delete it.
 3. Synthesise the fetched content into the appropriate canonical section like any other source. Cite the URL in the page's provenance section.
-4. Once consolidated, mark the URL note processed (move to `inbox/processed/` per the default convention) and reference the resulting canonical page in `LOG.md`.
+4. Once consolidated, mark the URL note processed (move to `inbox/processed/` per the default convention) and cite the URL in the resulting canonical page's provenance section.
 
 Treat any agent-supplied description body on a URL pointer as a hint about why the link was saved — useful for choosing the canonical page's framing.
 
@@ -170,7 +171,7 @@ Use this output shape:
 
 - Create `knowledge/design/example.md`
 - Update `INDEX.md`
-- Append `LOG.md`
+- Update `LOG.md` (overwrite Latest consolidation; reconcile Open follow-ups)
 
 ### Temporal Revisions
 
@@ -203,8 +204,8 @@ When approved, edit the KB directly:
 - Run `${CLAUDE_PLUGIN_ROOT}/bin/kb reindex <kb> --dry-run` to check the generated manifest; rebuild with plain `${CLAUDE_PLUGIN_ROOT}/bin/kb reindex <kb>` once content changes are settled.
 - Update `BRIEF.md` only when scope/key areas changed.
 - Stamp `last_reviewed: <ISO date>` in the frontmatter of any canonical page you touched.
-- When a new note contradicts an existing canonical claim, **replace the old claim** and append a supersession entry to `LOG.md` listing both the consumed inbox note and the prior canonical claim. Interference, not silent rewrite.
-- Append a short entry to `LOG.md` summarising what was consumed.
+- When a new note contradicts an existing canonical claim, **replace the old claim** and record it via `supersedes:` frontmatter on the rewritten page (listing the consumed inbox note and the prior path). Interference, not silent rewrite; git preserves the prior version.
+- **Overwrite** the `## Latest consolidation` section of `LOG.md` with this pass's summary (consumed paths, pages changed, structural changes); **edit** `## Open follow-ups` (add new, remove resolved). Do not append a dated entry — git is the history.
 - Mark consumed inbox notes as processed or move them under `inbox/processed/`.
 - Run `${CLAUDE_PLUGIN_ROOT}/bin/kb distill prune <kb>` to drop expired findings (default 90-day TTL).
 - Emit each approved distill finding from the Dream Plan via `kb distill record`. The plugin computes the hash, the tombstone-based `recurrence_after_retention` flag, and the anchor normalisation; you supply the typed payload:
@@ -269,7 +270,7 @@ Avoid:
 - speculative architecture
 - duplicating entire inbox notes
 - a global taxonomy that conflicts with the KB's local structure
-- silent rewrites: every replaced claim deserves a `LOG.md` supersession entry
+- silent rewrites: every replaced claim deserves a `supersedes:` frontmatter entry (git holds the prior version)
 
 ## Frontmatter conventions
 
@@ -301,7 +302,7 @@ Do not delete inbox notes in v0.
 
 ## Open Questions lifecycle
 
-When a canonical page records uncertainty under an "Open Questions" heading, treat those bullets as work items on the next dream pass. Either answer them (and remove the bullet) or move them to `LOG.md` if they're no longer relevant. Open Questions that survive multiple passes are a signal the page should be retired or split.
+When a canonical page records uncertainty under an "Open Questions" heading, treat those bullets as work items on the next dream pass. Either answer them (and remove the bullet) or, when they're cross-cutting rather than page-specific, move them to **Open follow-ups** in `LOG.md`. Open Questions that survive multiple passes are a signal the page should be retired or split.
 
 ## Output expectations
 
