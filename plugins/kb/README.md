@@ -112,14 +112,16 @@ The CLI honours Claude Code's standard per-repo plugin config (`pluginConfigs` i
 }
 ```
 
-Claude Code exports these as `CLAUDE_PLUGIN_OPTION_DEFAULT_KB` and `CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH` to the CLI's subprocess. Set them at user scope for a global default, at project scope for per-repo behaviour.
+Set these at user scope (`~/.claude/settings.json`) for a global default, or at project scope (`<repo>/.claude/settings.json`) for per-repo behaviour.
+
+Claude Code exposes configured options as `CLAUDE_PLUGIN_OPTION_*` env vars, but **only inside plugin-managed subprocesses** (hooks, MCP/LSP servers, monitors) — *not* inside the generic Bash-tool subprocess the kb skills use to invoke this CLI. So the CLI does not rely on the env var alone: when it is absent, the CLI reads the `pluginConfigs.kb.options` block straight from the `.claude/settings.json` cascade (the same files Claude Code would merge). The env var still takes precedence when present.
 
 Resolution order (highest precedence first):
 
 | Config | Order |
 |---|---|
-| Registry path | `--config <path>` > `KB_REGISTRY_CONFIG` > `CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH` > `~/.config/kb-registry/registry.json` |
-| Default KB (when no positional/--kb given) | explicit positional/--kb > `CLAUDE_PLUGIN_OPTION_DEFAULT_KB` > registry entry marked `"default": true` |
+| Registry path | `--config <path>` > `KB_REGISTRY_CONFIG` > `CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH` > `registry_config_path` in the `.claude/settings.json` cascade > `~/.config/kb-registry/registry.json` |
+| Default KB (when no positional/--kb given) | explicit positional/--kb > `CLAUDE_PLUGIN_OPTION_DEFAULT_KB` > `default_kb` in the `.claude/settings.json` cascade (project `settings.local.json` > project `settings.json` > user) > registry entry marked `"default": true` |
 
 ## v0 scope
 

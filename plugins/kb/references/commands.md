@@ -14,22 +14,24 @@ kb --version
 
 ## Config and default-KB resolution
 
-The CLI honours Claude Code plugin config (per-repo or user-scope) via the standard `pluginConfigs.kb.options` → `CLAUDE_PLUGIN_OPTION_*` env var bridge.
+The CLI honours Claude Code plugin config (per-repo or user-scope) set under `pluginConfigs.kb.options` in `.claude/settings.json`. Claude Code exports those values as `CLAUDE_PLUGIN_OPTION_*` env vars, but **only into plugin-managed subprocesses** (hooks, MCP/LSP servers, monitors) — not into the generic Bash-tool subprocess the kb skills use to run this CLI. So when the env var is absent, the CLI reads the `.claude/settings.json` cascade itself (the same files Claude Code would merge). The env var still wins when present.
 
 **Registry config path** — first set source wins:
 
 1. `--config <path>` flag
 2. `KB_REGISTRY_CONFIG` env var
-3. `CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH` (set via `pluginConfigs.kb.options.registry_config_path` in `.claude/settings.json`)
-4. `~/.config/kb-registry/registry.json` (default)
+3. `CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH` (set via `pluginConfigs.kb.options.registry_config_path`)
+4. `registry_config_path` read directly from the `.claude/settings.json` cascade (env-var fallback)
+5. `~/.config/kb-registry/registry.json` (default)
 
 **Default KB** (when a command's positional/--kb is omitted):
 
 1. The explicit positional or `--kb <name>` argument
-2. `CLAUDE_PLUGIN_OPTION_DEFAULT_KB` (set via `pluginConfigs.kb.options.default_kb` in `.claude/settings.json`)
-3. The registry entry marked `"default": true`
+2. `CLAUDE_PLUGIN_OPTION_DEFAULT_KB` (set via `pluginConfigs.kb.options.default_kb`)
+3. `default_kb` read directly from the `.claude/settings.json` cascade — nearest project `settings.local.json` > project `settings.json` > user `~/.claude/settings.json` (env-var fallback)
+4. The registry entry marked `"default": true`
 
-Use the project-scope `.claude/settings.json` to bind a different KB per repo without touching the global registry.
+Use the project-scope `.claude/settings.json` to bind a different KB per repo without touching the global registry. The cascade fallback (step 3) is what makes this work for the skill-invoked CLI, where the env var is never exported.
 
 ## Exit codes
 

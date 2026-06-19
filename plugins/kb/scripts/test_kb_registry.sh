@@ -702,17 +702,29 @@ else
 fi
 
 echo ""
-echo "--- 11d. CLAUDE_PLUGIN_OPTION_* env var bridge ---"
-# Set up two KBs in a fresh config so we can test which one wins.
+echo "--- 11d. Default-KB & registry-path resolution (env, settings cascade, registry) ---"
+# Absolute bin path so we can invoke kb from an isolated cwd. The settings
+# cascade walks up from the CWD, so bare-resolution assertions must NOT run
+# from the agents repo, whose own .claude/settings.json sets a project
+# default_kb that would otherwise win and break these assertions.
+KB_BIN_ABS="$(pwd)/plugins/kb/bin/kb"
+KBI="python3 $KB_BIN_ABS"
+ISO="$TMPDIR/iso-cwd"          # plain dir under TMPDIR: no .claude/ above it
+mkdir -p "$ISO"
+
+# Three KBs so each precedence tier maps to a distinct name.
 BRIDGE_CONFIG="$TMPDIR/bridge.json"
 cat > "$BRIDGE_CONFIG" <<JSON
 {"version": 1, "default_kb_root": "$TMPDIR/bridge", "metrics_path": "$METRICS", "kbs": []}
 JSON
 mkdir -p "$TMPDIR/bridge"
 $KB --config "$BRIDGE_CONFIG" bootstrap alpha --path "$TMPDIR/bridge/alpha-kb" >/dev/null 2>&1
-$KB --config "$BRIDGE_CONFIG" bootstrap beta --path "$TMPDIR/bridge/beta-kb" >/dev/null 2>&1
-# alpha was first so it carries default:true; bare `kb brief` returns alpha.
-DEFAULT_OUT=$($KB --config "$BRIDGE_CONFIG" brief 2>&1 | head -1)
+$KB --config "$BRIDGE_CONFIG" bootstrap beta  --path "$TMPDIR/bridge/beta-kb"  >/dev/null 2>&1
+$KB --config "$BRIDGE_CONFIG" bootstrap gamma --path "$TMPDIR/bridge/gamma-kb" >/dev/null 2>&1
+# alpha was bootstrapped first, so it carries default:true.
+
+# 1. No env, no project settings -> registry default (alpha). Run from isolated cwd.
+DEFAULT_OUT=$( (cd "$ISO" && $KBI --config "$BRIDGE_CONFIG" brief) 2>&1 | head -1)
 if echo "$DEFAULT_OUT" | grep -q "alpha"; then
     PASS=$((PASS+1))
     echo "  PASS  registry default resolves bare brief to alpha"
@@ -720,8 +732,8 @@ else
     FAIL=$((FAIL+1))
     echo "  FAIL  expected alpha, got: $DEFAULT_OUT"
 fi
-# CLAUDE_PLUGIN_OPTION_DEFAULT_KB overrides the registry default.
-ENV_OUT=$(CLAUDE_PLUGIN_OPTION_DEFAULT_KB=beta $KB --config "$BRIDGE_CONFIG" brief 2>&1 | head -1)
+# 2. CLAUDE_PLUGIN_OPTION_DEFAULT_KB overrides the registry default.
+ENV_OUT=$( (cd "$ISO" && CLAUDE_PLUGIN_OPTION_DEFAULT_KB=beta $KBI --config "$BRIDGE_CONFIG" brief) 2>&1 | head -1)
 if echo "$ENV_OUT" | grep -q "beta"; then
     PASS=$((PASS+1))
     echo "  PASS  CLAUDE_PLUGIN_OPTION_DEFAULT_KB overrides registry default"
@@ -729,8 +741,8 @@ else
     FAIL=$((FAIL+1))
     echo "  FAIL  expected beta via env, got: $ENV_OUT"
 fi
-# Explicit positional wins over env.
-FLAG_OUT=$(CLAUDE_PLUGIN_OPTION_DEFAULT_KB=beta $KB --config "$BRIDGE_CONFIG" brief alpha 2>&1 | head -1)
+# 3. Explicit positional wins over env.
+FLAG_OUT=$( (cd "$ISO" && CLAUDE_PLUGIN_OPTION_DEFAULT_KB=beta $KBI --config "$BRIDGE_CONFIG" brief alpha) 2>&1 | head -1)
 if echo "$FLAG_OUT" | grep -q "alpha"; then
     PASS=$((PASS+1))
     echo "  PASS  explicit positional KB wins over env var"
@@ -738,9 +750,59 @@ else
     FAIL=$((FAIL+1))
     echo "  FAIL  expected alpha via flag, got: $FLAG_OUT"
 fi
-# Env pointing at nonexistent KB errors clearly.
+# 4. Env pointing at nonexistent KB errors clearly.
 run_fail 2 "env var pointing at unknown KB exits 2" \
-    env CLAUDE_PLUGIN_OPTION_DEFAULT_KB=ghost $KB --config "$BRIDGE_CONFIG" brief
+    bash -c "cd '$ISO' && CLAUDE_PLUGIN_OPTION_DEFAULT_KB=ghost $KBI --config '$BRIDGE_CONFIG' brief"
+
+# --- Settings-cascade fallback: the path the kb skills actually use ---
+# Claude Code does NOT export CLAUDE_PLUGIN_OPTION_* into Bash-tool
+# subprocesses, so the CLI reads pluginConfigs.kb.options.default_kb from the
+# .claude/settings.json cascade directly. Build a fake project with its own
+# .claude/ and invoke kb from inside it.
+PROJ="$TMPDIR/proj"
+mkdir -p "$PROJ/.claude"
+cat > "$PROJ/.claude/settings.json" <<JSON
+{"pluginConfigs": {"kb": {"options": {"default_kb": "beta"}}}}
+JSON
+# 5. Project settings.json default_kb overrides the registry default (the fix).
+CASCADE_OUT=$( (cd "$PROJ" && $KBI --config "$BRIDGE_CONFIG" brief) 2>&1 | head -1)
+if echo "$CASCADE_OUT" | grep -q "beta"; then
+    PASS=$((PASS+1))
+    echo "  PASS  project settings.json default_kb overrides registry default"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected beta via settings cascade, got: $CASCADE_OUT"
+fi
+# 6. settings.local.json takes precedence over settings.json.
+cat > "$PROJ/.claude/settings.local.json" <<JSON
+{"pluginConfigs": {"kb": {"options": {"default_kb": "gamma"}}}}
+JSON
+LOCAL_OUT=$( (cd "$PROJ" && $KBI --config "$BRIDGE_CONFIG" brief) 2>&1 | head -1)
+if echo "$LOCAL_OUT" | grep -q "gamma"; then
+    PASS=$((PASS+1))
+    echo "  PASS  settings.local.json overrides settings.json"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected gamma via settings.local.json, got: $LOCAL_OUT"
+fi
+# 7. Env var still wins over the settings cascade.
+ENVWINS_OUT=$( (cd "$PROJ" && CLAUDE_PLUGIN_OPTION_DEFAULT_KB=alpha $KBI --config "$BRIDGE_CONFIG" brief) 2>&1 | head -1)
+if echo "$ENVWINS_OUT" | grep -q "alpha"; then
+    PASS=$((PASS+1))
+    echo "  PASS  env var wins over settings cascade"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected alpha via env over cascade, got: $ENVWINS_OUT"
+fi
+# 8. Explicit positional still wins over the settings cascade.
+POSWINS_OUT=$( (cd "$PROJ" && $KBI --config "$BRIDGE_CONFIG" brief beta) 2>&1 | head -1)
+if echo "$POSWINS_OUT" | grep -q "beta"; then
+    PASS=$((PASS+1))
+    echo "  PASS  explicit positional wins over settings cascade"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected beta via positional over cascade, got: $POSWINS_OUT"
+fi
 
 # CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH redirects the config file.
 EMPTY_CONFIG="$TMPDIR/empty-bridge.json"
@@ -763,6 +825,20 @@ if echo "$PRECEDENCE_OUT" | grep -q "alpha"; then
 else
     FAIL=$((FAIL+1))
     echo "  FAIL  expected --config precedence, got: $PRECEDENCE_OUT"
+fi
+# 9. registry_config_path read from the settings cascade (no --config, no env).
+PROJ_REG="$TMPDIR/proj-regpath"
+mkdir -p "$PROJ_REG/.claude"
+cat > "$PROJ_REG/.claude/settings.json" <<JSON
+{"pluginConfigs": {"kb": {"options": {"registry_config_path": "$EMPTY_CONFIG"}}}}
+JSON
+REGPATH_OUT=$( (cd "$PROJ_REG" && env -u KB_REGISTRY_CONFIG $KBI list) 2>&1)
+if echo "$REGPATH_OUT" | grep -q "No KBs registered"; then
+    PASS=$((PASS+1))
+    echo "  PASS  registry_config_path read from settings cascade"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected empty list via settings registry_config_path, got: $REGPATH_OUT"
 fi
 
 echo ""

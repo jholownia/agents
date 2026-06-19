@@ -18,15 +18,81 @@ EMPTY_CONFIG = {
 }
 
 
+def _iter_settings_files():
+    """Yield Claude Code settings.json paths in precedence order (highest first).
+
+    Mirrors Claude Code's scope precedence for a CLI launched from inside a
+    project tree:
+      1. <project>/.claude/settings.local.json   (personal project overrides)
+      2. <project>/.claude/settings.json          (shared project)
+      3. ~/.claude/settings.json                  (user scope)
+    where <project> is the nearest ancestor of the cwd that has a .claude/
+    directory (without crossing into $HOME). Enterprise and command-line
+    scopes are not reachable from here.
+    """
+    try:
+        cur = Path.cwd().resolve()
+    except OSError:
+        cur = None
+    home = Path(os.path.expanduser("~")).resolve()
+    if cur is not None:
+        for d in (cur, *cur.parents):
+            if d == home:
+                break  # ~/.claude is user scope, yielded separately below
+            claude_dir = d / ".claude"
+            if claude_dir.is_dir():
+                yield claude_dir / "settings.local.json"
+                yield claude_dir / "settings.json"
+                break  # nearest project .claude/ wins
+    yield home / ".claude" / "settings.json"
+
+
+def _plugin_option_from_settings(option):
+    """Return pluginConfigs.kb.options.<option> from the settings cascade, or None.
+
+    Claude Code exports configured plugin options as CLAUDE_PLUGIN_OPTION_*
+    only into plugin-managed subprocesses (hooks, MCP/LSP servers, monitors) —
+    NOT into the generic Bash-tool subprocess the kb skills use to invoke this
+    CLI. So the env var never arrives, and we read the same settings.json
+    cascade Claude Code would have merged. First non-empty value wins;
+    unreadable or malformed files are skipped (resolving a default must never
+    hard-fail the CLI).
+    """
+    for path in _iter_settings_files():
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        plugin_configs = data.get("pluginConfigs")
+        if not isinstance(plugin_configs, dict):
+            continue
+        # Accept the bare plugin id and the id@marketplace form.
+        for key in ("kb", "kb@agents"):
+            block = plugin_configs.get(key)
+            if isinstance(block, dict):
+                options = block.get("options")
+                if isinstance(options, dict):
+                    value = options.get(option)
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+    return None
+
+
 def resolve_config_path(explicit=None):
     """Resolve config path.
 
     Order (highest precedence first):
       1. explicit --config flag
       2. $KB_REGISTRY_CONFIG
-      3. $CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH (set by Claude Code from
-         the project- or user-scope pluginConfigs.kb.options block)
-      4. ~/.config/kb-registry/registry.json
+      3. $CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH (exported by Claude Code
+         into plugin-managed subprocesses)
+      4. pluginConfigs.kb.options.registry_config_path read directly from the
+         settings cascade (fallback for Bash-tool invocations, where the env
+         var above is not exported)
+      5. ~/.config/kb-registry/registry.json
     """
     if explicit:
         return explicit
@@ -36,18 +102,29 @@ def resolve_config_path(explicit=None):
     plugin_env = os.environ.get("CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH")
     if plugin_env:
         return plugin_env
+    settings_value = _plugin_option_from_settings("registry_config_path")
+    if settings_value:
+        return os.path.expanduser(settings_value)
     return DEFAULT_CONFIG_PATH
 
 
 def resolve_default_kb_name():
-    """Return the plugin-config-supplied default KB name, or None.
+    """Return the configured default KB name, or None.
 
-    Set per-repo via pluginConfigs.kb.options.default_kb in
-    .claude/settings.json; Claude Code exports it as
-    CLAUDE_PLUGIN_OPTION_DEFAULT_KB.
+    Order (highest precedence first):
+      1. $CLAUDE_PLUGIN_OPTION_DEFAULT_KB (exported by Claude Code into
+         plugin-managed subprocesses)
+      2. pluginConfigs.kb.options.default_kb read directly from the settings
+         cascade (fallback for Bash-tool invocations, where the env var is not
+         exported — which is how the kb skills shell out to this CLI)
+
+    Set per-repo via pluginConfigs.kb.options.default_kb in a project-scope
+    .claude/settings.json, or globally in ~/.claude/settings.json.
     """
     name = os.environ.get("CLAUDE_PLUGIN_OPTION_DEFAULT_KB", "").strip()
-    return name or None
+    if name:
+        return name
+    return _plugin_option_from_settings("default_kb")
 
 
 def ensure_parent(path):

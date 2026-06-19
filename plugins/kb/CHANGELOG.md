@@ -2,6 +2,11 @@
 
 # Changelog
 
+## 0.8.1 — 2026-06-19
+
+### Fixed
+- **Per-repo `default_kb` (and `registry_config_path`) now actually take effect.** The CLI relied solely on the `CLAUDE_PLUGIN_OPTION_*` env vars, but Claude Code exports those only into plugin-*managed* subprocesses (hooks, MCP/LSP servers, monitors) — **not** into the generic Bash-tool subprocess the kb skills use to invoke this CLI. The env var never arrived, so `pluginConfigs.kb.options.default_kb` in `.claude/settings.json` was silently ignored and resolution always fell through to the registry's `"default": true` entry. `resolve_default_kb_name()` and `resolve_config_path()` now fall back to reading the `.claude/settings.json` cascade directly (nearest project `settings.local.json` → project `settings.json` → user `~/.claude/settings.json`) when the env var is absent. The env var still wins when present, and an explicit positional/`--kb` still wins over everything. Adds `_iter_settings_files()` / `_plugin_option_from_settings()` helpers and a hermetic test section (11d) covering env > settings-cascade > registry precedence, `settings.local.json` > `settings.json`, and the `registry_config_path` fallback.
+
 ## 0.8.0 — 2026-06-19
 
 ### Changed
