@@ -2,6 +2,11 @@
 
 # Changelog
 
+## 0.8.2 — 2026-06-27
+
+### Added
+- **Writes now name the KB they resolved to, and warn on a silent registry-default fallback.** Follow-on to the 0.8.1 fix: the per-repo `default_kb` override still only reaches the CLI through the `.claude/settings.json` cascade, which `_iter_settings_files()` locates by walking up from `Path.cwd()`. When the CLI runs with a cwd *outside* the project tree (e.g. an agent does `cd …/some-kb && kb stage …`), no project override is found and resolution silently falls back to the registry's `"default": true` entry — which may be a personal KB, not the intended project one. The failure was invisible because the success line named no KB. Now every content write echoes its target (`Staged raw-note → hydra: inbox/…`, `Remembered → hydra: notes/…`, `distill: recorded … → hydra (hash …)`), and `kb stage` / `kb remember` / `kb distill record` print a stderr warning when the KB was reached purely by registry-default fallback (no explicit `<kb>`, no `default_kb` override) **and** more than one KB is registered. Single-KB registries don't warn (the fallback is unambiguous). Adds `_resolve_kb_with_source()` (reports `explicit` / `override` / `registry-default`) and `_warn_if_registry_default()`; `_resolve_kb()` is now a thin wrapper. Test section 11d gains five cases covering echo, the multi-KB fallback warning, and warning suppression for explicit/override/single-KB resolution.
+
 ## 0.8.1 — 2026-06-19
 
 ### Fixed

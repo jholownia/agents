@@ -804,6 +804,71 @@ else
     echo "  FAIL  expected beta via positional over cascade, got: $POSWINS_OUT"
 fi
 
+# --- Write-path KB echo + registry-default fallback warning ---
+# A write must name the KB it resolved to, and warn when it lands on the
+# registry default purely by fallback (no <kb>, no override) — the guard
+# against silently misrouting notes into the wrong (e.g. personal) KB.
+# The bridge config has 3 KBs, so the multi-KB warning condition holds.
+
+# 9. Bare stage from an isolated cwd -> registry default (alpha): echoes the
+#    KB name on stdout and warns about the fallback on stderr.
+(cd "$ISO" && $KBI --config "$BRIDGE_CONFIG" stage --kind raw-note \
+    --note "fallback note") >"$TMPDIR/fb.out" 2>"$TMPDIR/fb.err"
+if grep -q "→ alpha:" "$TMPDIR/fb.out"; then
+    PASS=$((PASS+1))
+    echo "  PASS  bare stage echoes the resolved KB (→ alpha)"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected '→ alpha:' in stage output, got: $(cat "$TMPDIR/fb.out")"
+fi
+if grep -q "registry default" "$TMPDIR/fb.err"; then
+    PASS=$((PASS+1))
+    echo "  PASS  registry-default fallback warns on stderr"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  expected fallback warning on stderr, got: $(cat "$TMPDIR/fb.err")"
+fi
+
+# 10. Explicit positional KB -> echoes that KB, no fallback warning.
+(cd "$ISO" && $KBI --config "$BRIDGE_CONFIG" stage beta --kind raw-note \
+    --note "explicit note") >"$TMPDIR/exp.out" 2>"$TMPDIR/exp.err"
+if grep -q "→ beta:" "$TMPDIR/exp.out" && ! grep -q "registry default" "$TMPDIR/exp.err"; then
+    PASS=$((PASS+1))
+    echo "  PASS  explicit KB echoes name and suppresses fallback warning"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  explicit KB out=$(cat "$TMPDIR/exp.out") err=$(cat "$TMPDIR/exp.err")"
+fi
+
+# 11. Settings-cascade override (from PROJ, default_kb=gamma) -> no warning.
+(cd "$PROJ" && $KBI --config "$BRIDGE_CONFIG" remember "override fact") \
+    >"$TMPDIR/ovr.out" 2>"$TMPDIR/ovr.err"
+if grep -q "→ gamma:" "$TMPDIR/ovr.out" && ! grep -q "registry default" "$TMPDIR/ovr.err"; then
+    PASS=$((PASS+1))
+    echo "  PASS  configured override echoes name and suppresses warning"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  override out=$(cat "$TMPDIR/ovr.out") err=$(cat "$TMPDIR/ovr.err")"
+fi
+
+# 12. Single-KB registry -> registry-default fallback is unambiguous: echo the
+#     name but do NOT warn (warning would be pure noise).
+SOLO_CONFIG="$TMPDIR/solo.json"
+cat > "$SOLO_CONFIG" <<JSON
+{"version": 1, "default_kb_root": "$TMPDIR/solo", "metrics_path": "$METRICS", "kbs": []}
+JSON
+mkdir -p "$TMPDIR/solo"
+$KB --config "$SOLO_CONFIG" bootstrap only --path "$TMPDIR/solo/only-kb" >/dev/null 2>&1
+(cd "$ISO" && $KBI --config "$SOLO_CONFIG" remember "solo fact") \
+    >"$TMPDIR/solo.out" 2>"$TMPDIR/solo.err"
+if grep -q "→ only:" "$TMPDIR/solo.out" && ! grep -q "registry default" "$TMPDIR/solo.err"; then
+    PASS=$((PASS+1))
+    echo "  PASS  single-KB fallback echoes name without warning"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  single-KB out=$(cat "$TMPDIR/solo.out") err=$(cat "$TMPDIR/solo.err")"
+fi
+
 # CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH redirects the config file.
 EMPTY_CONFIG="$TMPDIR/empty-bridge.json"
 cat > "$EMPTY_CONFIG" <<JSON

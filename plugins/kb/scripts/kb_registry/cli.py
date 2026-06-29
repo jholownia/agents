@@ -98,32 +98,73 @@ def _output(data, as_json):
             print(f"{k}: {v}")
 
 
-def _resolve_kb(config, name):
-    """Resolve KB by name or fall back to the project/user default.
+def _resolve_kb_with_source(config, name):
+    """Resolve a KB and report how it was resolved.
 
-    Order when name is empty:
-      1. $CLAUDE_PLUGIN_OPTION_DEFAULT_KB (project- or user-scope pluginConfigs)
-      2. The KB entry marked `"default": true` in the registry.
-
-    Returns (kb_entry, error_msg).
+    Returns (kb_entry, error_msg, source). `source` is one of:
+      "explicit"         - caller passed an explicit KB name
+      "override"         - resolved from the default_kb plugin option
+                           (CLAUDE_PLUGIN_OPTION_DEFAULT_KB env, or
+                           pluginConfigs.kb.options.default_kb in the settings
+                           cascade) — the intended project/user override
+      "registry-default" - no name and no override resolved; fell back to the
+                           KB marked `"default": true` in the registry
+    `source` is None whenever an error is returned.
     """
     if name:
         kb = find_kb(config, name)
         if not kb:
-            return None, f"KB '{name}' not found in registry."
-        return kb, None
+            return None, f"KB '{name}' not found in registry.", None
+        return kb, None, "explicit"
     plugin_default = resolve_default_kb_name()
     if plugin_default:
         kb = find_kb(config, plugin_default)
         if not kb:
-            return None, (f"KB '{plugin_default}' (from "
-                          "CLAUDE_PLUGIN_OPTION_DEFAULT_KB) not found in "
-                          "registry.")
-        return kb, None
+            return None, (f"KB '{plugin_default}' (from the default_kb plugin "
+                          "option) not found in registry."), None
+        return kb, None, "override"
     kb = get_default_kb(config)
     if not kb:
-        return None, "No KB specified and no default configured."
-    return kb, None
+        return None, "No KB specified and no default configured.", None
+    return kb, None, "registry-default"
+
+
+def _resolve_kb(config, name):
+    """Resolve a KB by name or fall back to the project/user default.
+
+    Thin wrapper over `_resolve_kb_with_source` for callers that don't need to
+    know how the KB was resolved. Returns (kb_entry, error_msg).
+    """
+    kb, err, _ = _resolve_kb_with_source(config, name)
+    return kb, err
+
+
+def _warn_if_registry_default(config, source):
+    """Warn (stderr) when a write resolved to the registry default by fallback.
+
+    The silent registry-default fallback is the failure mode behind misrouted
+    writes: with no explicit <kb> and no default_kb override reaching the CLI
+    (Claude Code does not export CLAUDE_PLUGIN_OPTION_* into the Bash-tool
+    subprocess, and the settings-cascade fallback only finds a project override
+    when the CLI's cwd is inside the project tree), the write lands in whatever
+    KB is marked default in the registry — which may be a personal KB rather
+    than the project one the agent intended.
+
+    Only fires when more than one KB is registered: with a single KB the
+    fallback is unambiguous and the warning would be pure noise.
+    """
+    if source != "registry-default":
+        return
+    if len(config.get("kbs", [])) <= 1:
+        return
+    print(
+        "warning: no <kb> given and no default_kb override resolved; falling "
+        "back to the registry default. If you meant a project KB, pass it "
+        "explicitly or set pluginConfigs.kb.options.default_kb in the "
+        "project's .claude/settings.json (and run kb from inside the project "
+        "tree).",
+        file=sys.stderr,
+    )
 
 
 def _slugify(text, max_len=40):
@@ -555,10 +596,11 @@ def cmd_remember(args, config, config_path):
     For personal user preferences ("I like X", "I prefer rebase"),
     use Claude's auto-memory instead — the KB is not the right layer.
     """
-    kb, err = _resolve_kb(config, args.kb)
+    kb, err, kb_source = _resolve_kb_with_source(config, args.kb)
     if err:
         print(f"Error: {err}", file=sys.stderr)
         return EXIT_ARGS
+    _warn_if_registry_default(config, kb_source)
 
     kb_path = kb["path"]
     if not os.path.isdir(kb_path):
@@ -636,7 +678,7 @@ def cmd_remember(args, config, config_path):
                 "committed": committed,
             }, True)
         else:
-            print(f"Remembered: {rel_path}")
+            print(f"Remembered → {kb['name']}: {rel_path}")
 
     return EXIT_OK
 
@@ -1418,7 +1460,8 @@ def _cmd_stage_dir(args, config, kb, kb_path):
                 "committed": committed,
             }, True)
         else:
-            print(f"Staged {len(staged)} file(s) from {src_root}")
+            print(f"Staged {len(staged)} file(s) → {kb['name']} "
+                  f"from {src_root}")
             if extracted_files:
                 print(f"  Of which {len(extracted_files)} extracted via "
                       f"{MARKITDOWN_BIN}.")
@@ -1451,10 +1494,11 @@ def cmd_stage(args, config, config_path):
     --note may accompany --url to provide a description; otherwise --note,
     --file, --url, and --dir are mutually exclusive primary inputs.
     """
-    kb, err = _resolve_kb(config, args.kb)
+    kb, err, kb_source = _resolve_kb_with_source(config, args.kb)
     if err:
         print(f"Error: {err}", file=sys.stderr)
         return EXIT_ARGS
+    _warn_if_registry_default(config, kb_source)
 
     kb_path = kb["path"]
     if not os.path.isdir(kb_path):
@@ -1693,16 +1737,16 @@ def cmd_stage(args, config, config_path):
             _output(payload, True)
         else:
             if is_extracted_file:
-                line = f"Staged extracted: {rel_path}"
+                line = f"Staged extracted → {kb['name']}: {rel_path}"
                 if source_rel is not None:
                     line += f"  (+ source: {source_rel})"
                 print(line)
             elif is_file:
-                print(f"Staged document: {rel_path}")
+                print(f"Staged document → {kb['name']}: {rel_path}")
             elif is_url:
-                print(f"Staged URL pointer: {rel_path}")
+                print(f"Staged URL pointer → {kb['name']}: {rel_path}")
             else:
-                print(f"Staged {kind} note: {rel_path}")
+                print(f"Staged {kind} note → {kb['name']}: {rel_path}")
 
     return EXIT_OK
 
@@ -2129,10 +2173,11 @@ def cmd_distill_record(args, config, config_path):
     observability. Validation failures exit `EXIT_ARGS`; IO failures exit
     `EXIT_FAILURE`.
     """
-    kb, err = _resolve_kb(config, args.kb)
+    kb, err, kb_source = _resolve_kb_with_source(config, args.kb)
     if err or kb is None:
         print(f"Error: {err}", file=sys.stderr)
         return EXIT_ARGS
+    _warn_if_registry_default(config, kb_source)
 
     kb_path = kb["path"]
     if not os.path.isdir(kb_path):
@@ -2231,7 +2276,7 @@ def cmd_distill_record(args, config, config_path):
         )
     else:
         print(
-            f"distill: recorded {type_} at {source} "
+            f"distill: recorded {type_} at {source} → {kb['name']} "
             f"(hash {computed_hash[:12]})"
         )
     return EXIT_OK
