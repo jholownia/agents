@@ -38,11 +38,33 @@ Add to `~/.claude/settings.json`:
 
 ### Codex
 
-Codex does not currently use Claude Code marketplaces directly in this repo. The pragmatic path is:
+Codex does not consume Claude Code marketplaces. It discovers skills as
+self-contained folders under `$CODEX_HOME/skills/<name>/` (default `~/.codex/skills`)
+and follows symlinks — so the single-source-of-truth path is to symlink a skill's
+directory into the Codex skills dir. Two cases:
 
-1. Install the plugin with Claude Code.
-2. Symlink the installed skill or plugin directory from `~/.claude/` into the matching Codex location under `~/.codex/`.
-3. Keep Claude Code as the source of truth for marketplace install/update operations.
+- **Standalone skills** (self-contained, skill-relative paths) symlink directly:
+  `ln -sfn <skill-dir> ~/.codex/skills/<name>`.
+- **Plugin skills that resolve paths through `${CLAUDE_PLUGIN_ROOT}`** (like `kb`)
+  also need that variable exported to Codex's shells — Codex, unlike Claude Code,
+  does not set it. Add it once to `~/.codex/config.toml`:
+
+  ```toml
+  [shell_environment_policy.set]
+  CLAUDE_PLUGIN_ROOT = "/abs/path/to/plugins/<name>"
+  ```
+
+  This is a global Codex setting and `CLAUDE_PLUGIN_ROOT` is per-plugin, so it cleanly
+  serves only one such plugin at a time; expose a second one only by making its skills
+  self-contained.
+
+For `kb`, both steps are automated — run
+[`plugins/kb/scripts/link-codex-skills.sh`](plugins/kb/scripts/link-codex-skills.sh),
+add the config snippet it prints, and restart Codex. See the plugin's
+[README](plugins/kb/README.md#using-kb-from-codex) for details.
+
+Claude Code stays the source of truth for marketplace install/update; the Codex
+symlinks track the live plugin tree.
 
 ## Repository structure
 

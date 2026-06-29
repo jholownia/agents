@@ -123,6 +123,40 @@ Resolution order (highest precedence first):
 | Registry path | `--config <path>` > `KB_REGISTRY_CONFIG` > `CLAUDE_PLUGIN_OPTION_REGISTRY_CONFIG_PATH` > `registry_config_path` in the `.claude/settings.json` cascade > `~/.config/kb-registry/registry.json` |
 | Default KB (when no positional/--kb given) | explicit positional/--kb > `CLAUDE_PLUGIN_OPTION_DEFAULT_KB` > `default_kb` in the `.claude/settings.json` cascade (project `settings.local.json` > project `settings.json` > user) > registry entry marked `"default": true` |
 
+## Using kb from Codex
+
+The skills also run under OpenAI Codex. Codex discovers skills as self-contained
+folders under `~/.codex/skills/<name>/` and resolves their paths relative to the skill
+dir or absolute — it has no `${CLAUDE_PLUGIN_ROOT}`, which the kb skills use to reach
+`bin/kb` and `references/`. So exposing kb to Codex takes two steps, both handled by
+[`scripts/link-codex-skills.sh`](scripts/link-codex-skills.sh):
+
+1. Symlink each skill into `~/.codex/skills/` as `kb-<skill>` (idempotent; safe to
+   re-run after `git pull`).
+2. Export `CLAUDE_PLUGIN_ROOT` to Codex's shell subprocesses so the existing
+   `${CLAUDE_PLUGIN_ROOT}/bin/kb` and `${CLAUDE_PLUGIN_ROOT}/references/*` paths resolve
+   unchanged. Add to `~/.codex/config.toml` (the script prints this with your path):
+
+   ```toml
+   [shell_environment_policy.set]
+   CLAUDE_PLUGIN_ROOT = "/abs/path/to/plugins/kb"
+   ```
+
+Restart Codex afterwards to pick up the new skills. Notes:
+
+- The symlinks point at this **live plugin tree**, not Claude Code's versioned plugin
+  cache — so Codex always sees the current source. The `kb` CLI is self-locating, so a
+  `kb` already on PATH works regardless; the env var only makes the skills' literal
+  `${CLAUDE_PLUGIN_ROOT}` references resolve.
+- `[shell_environment_policy.set]` is global to Codex and `CLAUDE_PLUGIN_ROOT` is
+  per-plugin, so this cleanly serves kb alone. Exposing a second
+  `${CLAUDE_PLUGIN_ROOT}`-based plugin to Codex would require making its skills
+  self-contained instead.
+- Codex has no equivalent of Claude's slash commands or subagents, so `/kb:*` and the
+  `kb-dream` agent are not ported. But every command is a thin `kb` CLI passthrough
+  (`kb bootstrap`, `kb status`, `kb sync`, …) the agent can run directly, and the
+  `kb:registry` / `kb:recall` skills already document those verbs.
+
 ## v0 scope
 
 Python 3 stdlib only. Lexical search via `rg`. Markdown/Git KBs. No MCP, vector search, or autonomous rewrites.
