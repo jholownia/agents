@@ -60,7 +60,12 @@ from .distill import (
     tombstone_path,
     validate_finding,
 )
-from .search import _extract_title, search_kb
+from .search import (
+    _extract_title,
+    min_coverage,
+    search_kb,
+    tokenize_query,
+)
 
 # Exit codes
 EXIT_OK = 0
@@ -697,21 +702,50 @@ def _load_index_json(kb_path):
     return data if isinstance(data, list) else None
 
 
-def _score_index_entry(entry, query_lc):
-    """Higher score = stronger match. Title hits dominate tags and summaries."""
-    score = 0
+def _score_index_entry(entry, query_lc, terms_lc):
+    """Rank an index entry as (phrase_score, coverage, term_score).
+
+    The tuple sorts lexicographically, so a verbatim phrase hit always
+    outranks a scatter of individual term hits. `coverage` — how many
+    distinct query terms the entry carries — is what lets a sentence-shaped
+    query reach a page whose title only shares two of its words. Matching
+    is case-insensitive here; smart-case applies to body search only.
+    Title hits dominate tags and summaries in both dimensions.
+    """
     title = (entry.get("title") or "").lower()
     summary = (entry.get("summary") or "").lower()
     tags = [str(t).lower() for t in entry.get("tags") or []]
+
+    phrase_score = 0
     if query_lc in title:
-        score += 3
+        phrase_score += 3
     if any(query_lc == t for t in tags):
-        score += 2
+        phrase_score += 2
     elif any(query_lc in t for t in tags):
-        score += 1
+        phrase_score += 1
     if query_lc in summary:
-        score += 1
-    return score
+        phrase_score += 1
+
+    term_score = 0
+    coverage = 0
+    for term in terms_lc:
+        hit = False
+        if term in title:
+            term_score += 3
+            hit = True
+        if any(term == t for t in tags):
+            term_score += 2
+            hit = True
+        elif any(term in t for t in tags):
+            term_score += 1
+            hit = True
+        if term in summary:
+            term_score += 1
+            hit = True
+        if hit:
+            coverage += 1
+
+    return (phrase_score, coverage, term_score)
 
 
 def _entry_to_result(entry, kb_name, source):
@@ -972,15 +1006,22 @@ def cmd_recall(args, config, config_path):
         # --- Query path: rank index hits, then merge body-grep hits. ---
         query = args.query
         query_lc = query.lower()
+        terms_lc = [t.lower() for t in tokenize_query(query)]
+        required_coverage = min_coverage(len(terms_lc))
         seen_paths = set()
 
         if index is not None:
             scored = []
             for entry in index:
-                s = _score_index_entry(entry, query_lc)
-                if s > 0:
+                s = _score_index_entry(entry, query_lc, terms_lc)
+                # A verbatim phrase hit always qualifies; otherwise the
+                # entry must carry enough distinct terms to beat noise —
+                # one shared word out of five is not a match.
+                if s[0] > 0 or s[1] >= required_coverage:
                     scored.append((s, entry))
-            scored.sort(key=lambda x: (-x[0], x[1].get("path", "")))
+            scored.sort(key=lambda x: (
+                -x[0][0], -x[0][1], -x[0][2], x[1].get("path", "")
+            ))
             for _, entry in scored:
                 result = _entry_to_result(entry, kb["name"], "index")
                 all_results.append(result)

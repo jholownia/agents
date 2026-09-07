@@ -1,7 +1,7 @@
 ---
 name: recall
 description: This skill should be used when the user asks "what did we decide about X", "what do we know about Y", "last session we discussed Z", "what's pending in <kb>", "what's in <kb>'s inbox", "show me the dream log", or wants to retrieve facts, decisions, or knowledge from a registered KB. Consults index.json (built by `kb reindex`) before falling back to body grep.
-version: 0.2.0
+version: 0.3.0
 ---
 
 # kb:recall
@@ -21,7 +21,14 @@ The primary skill for "what do we know about X" questions, plus the inspection v
 
 ## Search tokenization
 
-`${CLAUDE_PLUGIN_ROOT}/bin/kb recall --query` and `${CLAUDE_PLUGIN_ROOT}/bin/kb search` are **lexical** (`rg`-backed) and treat the query as a regex pattern. A quoted multi-word phrase must match exactly — if a phrase returns zero results, retry with single keywords or two-token slices. Defaults: 20 total results / 3 matches per file.
+`${CLAUDE_PLUGIN_ROOT}/bin/kb recall --query` and `${CLAUDE_PLUGIN_ROOT}/bin/kb search` are **lexical** and tokenize multi-word queries, so a question-shaped query works: `--query "how do we handle a stale index"` reaches a page titled "Stale index handling". Stopwords are dropped, results rank by how many distinct query terms a page carries, and verbatim phrase matches sort first.
+
+Two things worth knowing:
+
+- **A query with no whitespace is matched verbatim**, not split — `foo(bar)`, `analyze_meter_drift`, and `-dash-token` stay exact. To search for parts of an identifier, pass them as separate words.
+- **Long queries relax to half coverage.** Three or more terms need only half of them to match, so a low-ranked tail hit may share just two words with your query. Judge results by rank, not by presence.
+
+Defaults: 20 total results / 3 matches per file.
 
 ## Commands
 

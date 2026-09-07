@@ -516,6 +516,48 @@ else
     echo "  FAIL  smart-case broken — uppercase query matched anyway: $SMART_UPPER"
 fi
 
+# Tokenized multi-word queries. Before 0.9.0 the whole query was one
+# literal string, so a question-shaped query returned nothing even when
+# the page was right there — the failure mode this tokenizer exists for.
+$KB --config "$CONFIG" stage test --note "Stale index handling for the widget cache." >/dev/null 2>&1
+TOKEN_OUT=$($KB --config "$CONFIG" search test "how do we handle a stale index" 2>&1)
+if echo "$TOKEN_OUT" | grep -q "Stale index handling"; then
+    PASS=$((PASS+1))
+    echo "  PASS  search tokenizes sentence-shaped query"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  sentence query missed page sharing its words: $TOKEN_OUT"
+fi
+
+# A whitespace-free query is an identifier: matched verbatim, never split.
+# Splitting it would turn a distinctive string into common words.
+IDENT_OUT=$($KB --config "$CONFIG" search test "stale-index-handling-widget" 2>&1)
+if echo "$IDENT_OUT" | grep -q "No results"; then
+    PASS=$((PASS+1))
+    echo "  PASS  whitespace-free query matched verbatim, not tokenized"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  identifier query was split into terms: $IDENT_OUT"
+fi
+
+# Coverage floor: 4-term queries need >=2 distinct terms in one file.
+COV_MISS=$($KB --config "$CONFIG" search test "stale xylophone marmoset zeppelin" 2>&1)
+if echo "$COV_MISS" | grep -q "No results"; then
+    PASS=$((PASS+1))
+    echo "  PASS  one term out of four falls below the coverage floor"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  single-term coverage leaked through: $COV_MISS"
+fi
+COV_HIT=$($KB --config "$CONFIG" search test "stale widget xylophone marmoset" 2>&1)
+if echo "$COV_HIT" | grep -q "Stale index handling"; then
+    PASS=$((PASS+1))
+    echo "  PASS  two terms out of four clear the coverage floor"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  half-coverage query returned nothing: $COV_HIT"
+fi
+
 echo ""
 echo "--- 6b. Remember + Recall ---"
 run "remember emma fact" $KB --config "$CONFIG" remember "EMMA's nightly job runs at 02:00 UTC via cron." --tags emma,runbook
@@ -1018,6 +1060,21 @@ assert any(r.get('source') == 'index' and r.get('path') == 'knowledge/widgets.md
 else
     FAIL=$((FAIL+1))
     echo "  FAIL  recall did not surface index match (got: $OUT)"
+fi
+# The index tier tokenizes too: a question-shaped query must reach an entry
+# through its summary, not just through a verbatim title substring.
+OUT=$($KB --config "$CONFIG" recall test --query "which mechanical assemblies ship from Cardiff" --json 2>&1)
+if echo "$OUT" | python3 -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+assert any(r.get('source') == 'index' and r.get('path') == 'knowledge/widgets.md'
+           for r in data), data
+"; then
+    PASS=$((PASS+1))
+    echo "  PASS  index tier ranks by term coverage"
+else
+    FAIL=$((FAIL+1))
+    echo "  FAIL  index tier missed multi-term query (got: $OUT)"
 fi
 # Tag recall uses index.json (no rg required).
 OUT=$($KB --config "$CONFIG" recall test --tag widgets --json 2>&1)

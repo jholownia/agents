@@ -1,3 +1,3 @@
 """kb — manage agent-maintained knowledge bases."""
 
-__version__ = "0.8.2"
+__version__ = "0.9.0"

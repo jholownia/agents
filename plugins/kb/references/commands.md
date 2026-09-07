@@ -188,6 +188,8 @@ ${CLAUDE_PLUGIN_ROOT}/bin/kb open <kb> <path> --max-chars 10000
 
 Lexical search using `rg` (with Python fallback).
 
+Multi-word queries are tokenized: stopwords are dropped, each remaining term is matched as a substring, and files rank by how many distinct terms they carry. Queries of three or more terms qualify at half coverage; one- and two-term queries need every term. A query containing no whitespace is treated as an identifier and matched verbatim (`foo(bar)`, `-dash-token`). Case follows smart-case, decided on the terms actually searched: all-lowercase terms match case-insensitively, any uppercase makes the search case-sensitive.
+
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/bin/kb search <kb> "<query>"
 ${CLAUDE_PLUGIN_ROOT}/bin/kb search "<query>"              # search all KBs

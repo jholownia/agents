@@ -2,6 +2,23 @@
 
 # Changelog
 
+## 0.9.0 — 2026-09-07
+
+### Changed
+
+- **Search tokenizes multi-word queries instead of matching them as one literal string.** `kb search` and `kb recall --query` were literal in all three retrieval paths — `rg --fixed-strings`, the fallback's `re.escape(query)`, and `_score_index_entry`'s `query_lc in title` — so a sentence-shaped query like `--query "how do we handle a stale index"` scored zero against a page titled "Stale index handling". Agents read the empty result as "the KB doesn't know", and rephrased instead of finding the page that was sitting right there. Queries are now split into terms (stopwords dropped, case preserved), each matched as a substring, with files ranked by how many *distinct* query terms they carry; verbatim phrase hits still sort first. Probed against a 172-page KB, four representative question-shaped queries went from 0 results each to 9–10 ranked results; single-word queries return byte-identical output.
+
+  Precision guards, so the looser matching doesn't just return noise:
+  - **A query with no whitespace is matched verbatim, never split.** `foo(bar)`, `-dash-token`, and `analyze_meter_drift` are identifiers; splitting them on punctuation turns a distinctive string into common words that hit everywhere. Tokenization only applies where literal matching was actually failing — multi-word queries.
+  - **Coverage floor.** One- and two-term queries require every term; three or more relax to half, so one off word no longer zeroes the result set while a single shared word still doesn't qualify as a match.
+  - **Markdown-only by default.** The `rg` branch previously searched every file type while the Python fallback read only `.md` — a latent divergence that became a real one under term alternation, since `index.json`'s summaries match almost any term. An explicit `--glob` still passes through unchanged.
+
+- **Smart-case is now decided on the terms actually searched, not the raw query.** `rg --smart-case` inspects the pattern, so a query like `"A stale index"` — whose only uppercase character is a dropped stopword — would have gone case-insensitive under `rg` and case-sensitive under the Python fallback. Both backends now read one `case_sensitive_for(terms)` helper and `rg` gets an explicit `--case-sensitive` / `--ignore-case`. Verified: zero result-set divergence between backends across 3 real KBs × 12 queries.
+
+- **`_score_index_entry` returns `(phrase_score, coverage, term_score)`** rather than a flat int, sorted lexicographically so an exact phrase hit always outranks a scatter of individual term hits. Body-search internals were reshaped around a shared ranker: `_search_rg`/`_search_python` became `_collect_rg`/`_collect_python` (raw candidates) plus one `_rank()`, which removes the old per-backend ranking divergence and makes result order deterministic in both. `search_kb()`'s signature and result-dict shape are unchanged; `match_count` now carries the line's distinct-term count (was always `1`, which is what a single-term query still yields).
+
+Five test cases added: sentence-shaped query reaches a partially-matching page, whitespace-free query stays verbatim, the coverage floor rejects 1-of-4 and accepts 2-of-4, and the index tier ranks by coverage through an entry's summary.
+
 ## 0.8.2 — 2026-06-27
 
 ### Added
